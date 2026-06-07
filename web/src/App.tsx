@@ -996,7 +996,7 @@ export default function App() {
                 .
               </p>
               <div className="mt-3 grid grid-cols-1 divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.02] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-                <div className="px-4 py-3"><Stat label="Retire age" value={`${proj.retireAge}`} hint="when drawdown starts" /></div>
+                <div className="px-4 py-3"><Stat label="Chosen retire age" value={`${proj.retireAge}`} hint="when drawdown starts" /></div>
                 <div className="px-4 py-3"><Stat label={`Portfolio @ ${proj.retireAge}`} value={usdShort(proj.lifeLiquid[retireIdx])} hint="invested at retirement" /></div>
                 <div className="px-4 py-3"><Stat label="Plan survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `broke at ${proj.depletionAge}` : `lasts to ${inp.lifeExpectancy}`} /></div>
               </div>
