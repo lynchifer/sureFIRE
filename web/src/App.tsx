@@ -34,30 +34,66 @@ const C = {
   drawdownFill: 'rgba(244, 114, 182, 0.13)',
 }
 
+/** Tracks whether the viewport is phone-sized (matches Tailwind's `sm` breakpoint), updating on
+ *  rotate/resize. Used to size the chart shorter on mobile so it doesn't dominate the scroll. */
+function useIsMobile() {
+  const query = '(max-width: 640px)'
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const onChange = () => setIsMobile(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return isMobile
+}
+
+/** Help tooltip anchored to a ⓘ trigger. Native `title` only shows after a ~1s delay (and is flaky in
+ *  iframes), so it read as "saying nothing"; this appears instantly on hover, keyboard focus, and tap
+ *  (the trigger is focusable). Position is computed in JS and clamped inside the viewport — a centered
+ *  fixed-width popover near the right edge would otherwise overflow and give mobile a horizontal
+ *  scrollbar. While idle it's display:none, so it never widens the page. */
+function InfoTip({ help }: { help: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [box, setBox] = useState<{ left: number; width: number } | null>(null)
+  const open = () => {
+    const el = ref.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const m = 8
+    const width = Math.min(224, window.innerWidth - m * 2)
+    const vpLeft = Math.max(m, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - m))
+    setBox({ left: vpLeft - r.left, width }) // left is relative to the trigger (the tooltip's offset parent)
+  }
+  const close = () => setBox(null)
+  return (
+    <span ref={ref} className="relative inline-flex items-center" onMouseEnter={open} onMouseLeave={close}>
+      <span
+        tabIndex={0}
+        role="img"
+        aria-label={help}
+        onFocus={open}
+        onBlur={close}
+        className="-m-1.5 cursor-help p-1.5 leading-none text-neutral-500 outline-none transition-colors hover:text-neutral-300 focus-visible:text-neutral-300"
+      >
+        ⓘ
+      </span>
+      <span
+        role="tooltip"
+        style={box ? { left: box.left, width: box.width } : undefined}
+        className={`pointer-events-none absolute bottom-full z-50 mb-2 rounded-lg border border-white/10 bg-neutral-900/95 px-3 py-2 text-[11px] font-normal normal-case leading-snug tracking-normal text-neutral-200 shadow-xl backdrop-blur ${box ? 'block' : 'hidden'}`}
+      >
+        {help}
+      </span>
+    </span>
+  )
+}
+
 function FieldLabel({ label, help }: { label: string; help?: string }) {
   return (
     <span className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-neutral-400">
       {label}
-      {help && (
-        // Custom tooltip: native `title` only shows after a ~1s delay (and is flaky in iframes), so it read
-        // as "saying nothing". This appears instantly on hover AND keyboard focus, in normal-case prose.
-        <span className="group relative inline-flex items-center">
-          <span
-            tabIndex={0}
-            role="img"
-            aria-label={help}
-            className="cursor-help leading-none text-neutral-500 outline-none transition-colors hover:text-neutral-300 focus-visible:text-neutral-300"
-          >
-            ⓘ
-          </span>
-          <span
-            role="tooltip"
-            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 rounded-lg border border-white/10 bg-neutral-900/95 px-3 py-2 text-[11px] font-normal normal-case leading-snug tracking-normal text-neutral-200 opacity-0 shadow-xl backdrop-blur transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100"
-          >
-            {help}
-          </span>
-        </span>
-      )}
+      {help && <InfoTip help={help} />}
     </span>
   )
 }
@@ -319,6 +355,8 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
   const renameCanceled = useRef(false)
+  const isMobile = useIsMobile()
+  const chartHeight = isMobile ? 440 : 540
   const brand = 'sure'
   useEffect(() => {
     document.title = `${brand}FIRE — when can I retire?`
@@ -620,7 +658,7 @@ export default function App() {
     yaxis: useLog
       ? { ...baseAxes.yaxis, type: 'log', dtick: 1, tickformat: '~s' } // decades only ($1M·$10M·$100M) — no minor-tick clutter
       : { ...baseAxes.yaxis, range: [yBottom, yTop] },
-    height: 540,
+    height: chartHeight,
     margin: { l: 66, r: 20, t: 16, b: 64 },
     hovermode: 'x unified',
     legend: { orientation: 'h', y: -0.16, x: 0.5, xanchor: 'center', font: { size: 12 } },
@@ -638,7 +676,7 @@ export default function App() {
   }
 
   const compareData = allProj.flatMap(({ plan, proj: pr }, i) => compareTraces(plan, pr, PLAN_COLORS[i % PLAN_COLORS.length]))
-  const compareLayout = { ...baseAxes, height: 540, margin: { l: 66, r: 24, t: 16, b: 64 }, hovermode: 'closest', legend: { orientation: 'h', y: -0.16, x: 0.5, xanchor: 'center', font: { size: 12 } } }
+  const compareLayout = { ...baseAxes, height: chartHeight, margin: { l: 66, r: 24, t: 16, b: 64 }, hovermode: 'closest', legend: { orientation: 'h', y: -0.16, x: 0.5, xanchor: 'center', font: { size: 12 } } }
 
   const showMc = mode === 'mc' && !compare && mc !== null
   const heroTiers = showMc && mc ? mcTiers : singleTiers
@@ -665,7 +703,7 @@ export default function App() {
   const mcLayout = {
     ...baseAxes,
     xaxis: { ...baseAxes.xaxis, range: mc ? [mcx[0], mcx[mcx.length - 1]] : undefined },
-    height: 540,
+    height: chartHeight,
     margin: { l: 66, r: 24, t: 16, b: 64 },
     hovermode: 'x unified',
     legend: { orientation: 'h', y: -0.16, x: 0.5, xanchor: 'center', font: { size: 12 } },
@@ -735,7 +773,7 @@ export default function App() {
                         onClick={() => startRename(p.id)}
                         aria-label={`Rename profile ${p.name}`}
                         title="Rename"
-                        className="rounded text-neutral-500 hover:text-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                        className="-m-1 rounded p-1 text-neutral-500 hover:text-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
                       >
                         ✎
                       </button>
@@ -745,7 +783,7 @@ export default function App() {
                         onClick={() => onDeleteClick(p.id)}
                         aria-label={confirming ? `Confirm delete ${p.name}` : `Delete profile ${p.name}`}
                         title={confirming ? 'Click again to delete' : 'Delete'}
-                        className={`rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 ${confirming ? 'font-semibold text-rose-400' : 'text-neutral-600 hover:text-rose-400'}`}
+                        className={`-m-1 rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 ${confirming ? 'font-semibold text-rose-400' : 'text-neutral-600 hover:text-rose-400'}`}
                       >
                         {confirming ? '✓?' : '×'}
                       </button>
@@ -913,7 +951,7 @@ export default function App() {
                 <li>I don't save your data — {brand}FIRE has no backend, and nothing you type ever leaves your browser. Don't believe me? <a href="https://github.com/lynchifer/sureFIRE" target="_blank" rel="noreferrer" className="text-neutral-300 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-200">read the source</a>.</li>
               </ul>
             </details>
-            <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-b from-emerald-500/[0.05] to-white/[0.015] p-6">
+            <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-b from-emerald-500/[0.05] to-white/[0.015] p-5">
               <div className="flex items-baseline justify-between">
                 <div className="text-sm font-medium text-neutral-200">
                   {active?.name ?? 'Plan'}
@@ -921,36 +959,36 @@ export default function App() {
                 </div>
                 <div className="text-xs tabular-nums text-neutral-500">{pct(proj.savingsRate, 0)} saved</div>
               </div>
-              <div className="mt-5 grid grid-cols-3 divide-x divide-white/[0.08]">
+              <div className="mt-4 grid grid-cols-3 divide-x divide-white/[0.08]">
                 {heroTiers.map((t) => {
                   const isFire = t.label === 'FI'
                   return (
-                    <div key={t.label} className="px-5 first:pl-0 last:pr-0">
+                    <div key={t.label} className="px-4 first:pl-0 last:pr-0">
                       <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: t.color }}>
                         <span className="text-sm">{t.icon}</span>
                         {t.label}
                       </div>
                       {Number.isFinite(t.years) ? (
                         <>
-                          <div className={`mt-2 font-bold leading-none tabular-nums ${isFire ? 'text-3xl text-white sm:text-[2.5rem]' : 'text-2xl text-neutral-300 sm:text-[1.9rem]'}`}>
+                          <div className={`mt-1.5 font-bold leading-none tabular-nums ${isFire ? 'text-[1.75rem] text-white' : 'text-xl text-neutral-300'}`}>
                             {t.years.toFixed(1)}
-                            <span className="ml-1 text-sm font-medium text-neutral-500">yr</span>
+                            <span className="ml-1 text-xs font-medium text-neutral-500">yr</span>
                           </div>
-                          <div className="mt-2 text-xs tabular-nums text-neutral-500">
+                          <div className="mt-1 text-[11px] tabular-nums text-neutral-500">
                             age {t.age} · {usdShort(t.target)}
                           </div>
                         </>
                       ) : (
                         <>
-                          <div className="mt-2 text-2xl font-semibold text-neutral-600">—</div>
-                          <div className="mt-2 text-xs tabular-nums text-neutral-500">{usdShort(t.target)} target</div>
+                          <div className="mt-1.5 text-xl font-semibold text-neutral-600">—</div>
+                          <div className="mt-1 text-[11px] tabular-nums text-neutral-500">{usdShort(t.target)} target</div>
                         </>
                       )}
                     </div>
                   )
                 })}
               </div>
-              <p className="mt-2.5 text-[13px] leading-relaxed text-neutral-400">
+              <p className="mt-3 text-xs leading-relaxed text-neutral-400">
                 Scales your <span className="text-neutral-200">{usdShort(inp.retirementSpending ?? totalSpending(inp))}</span>{' '}
                 {inp.retirementSpending != null ? 'retirement' : 'annual'} spend (<span className="text-emerald-300/90">{Math.round(inp.leanFactor * 100)}%</span> · <span className="text-rose-300/90">100%</span> · <span className="text-amber-300/90">{Math.round(inp.fatFactor * 100)}%</span>) ÷ your{' '}
                 <span className="text-neutral-200">{(inp.withdrawalRate * 100).toFixed(1)}%</span> withdrawal rate, grossed up for tax
@@ -962,12 +1000,12 @@ export default function App() {
                 )}
                 .
               </p>
-              <div className="mt-4 grid grid-cols-3 gap-3 border-t border-white/[0.06] pt-4">
+              <div className="mt-3 grid grid-cols-3 gap-3 border-t border-white/[0.06] pt-3">
                 <Stat label="Net worth @ FI" value={usdShort(nwAtRetire)} />
                 <Stat label="Portfolio @ retire" value={usdShort(proj.lifeLiquid[retireIdx])} hint={`age ${proj.retireAge}`} />
                 <Stat label="Plan survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `broke at ${proj.depletionAge}` : `lasts to ${inp.lifeExpectancy}`} />
               </div>
-              <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
+              <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
                 <span className="mt-px text-sm leading-none">💡</span>
                 <p className="text-xs leading-relaxed text-neutral-400">
                   <button type="button" onClick={() => set('retireAge', recRetire)} className="font-semibold text-emerald-400 underline decoration-dotted underline-offset-2 hover:text-emerald-300">

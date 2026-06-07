@@ -6,6 +6,21 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Safety net: never let a stray off-screen element (e.g. an absolutely-positioned popover near the
+   right edge) give the whole page a horizontal scrollbar on mobile. */
+body {
+  overflow-x: hidden;
+}
+
+/* iOS Safari zooms the page when you focus an input whose text is < 16px. Bump every editable field
+   (sliders excepted) to 16px on phones; desktop keeps Tailwind's denser text-sm. The attribute
+   selector outranks the .text-sm utility, so this wins without !important. */
+@media (max-width: 640px) {
+  input:not([type='range']) {
+    font-size: 16px;
+  }
+}
+
 /* Hide number spinners (and prevent scroll-wheel from nudging values is handled in JS). */
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
