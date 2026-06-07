@@ -54,7 +54,7 @@ function Num({
           value={text}
           onChange={onInput}
           onWheel={(e) => e.currentTarget.blur()}
-          className="w-full bg-transparent px-1 py-1.5 text-sm tabular-nums text-neutral-100 outline-none"
+          className="w-full bg-transparent px-1 py-1.5 text-base tabular-nums text-neutral-100 outline-none sm:text-sm"
         />
         {suffix && <span className="text-xs text-neutral-400">{suffix}</span>}
       </div>

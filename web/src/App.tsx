@@ -102,7 +102,8 @@ const inputBox =
   'flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2.5 transition-colors focus-within:border-emerald-500/70 focus-within:bg-white/[0.06]'
 const inputBoxError =
   'flex items-center rounded-md border border-rose-500/55 bg-white/[0.03] px-2.5 transition-colors focus-within:border-rose-500 focus-within:bg-white/[0.06]'
-const inputText = 'w-full bg-transparent px-0.5 py-1.5 text-sm tabular-nums text-neutral-50 outline-none placeholder:text-neutral-600'
+// text-base (16px) on mobile prevents iOS Safari's auto-zoom on input focus; shrink to 14px on ≥sm.
+const inputText = 'w-full bg-transparent px-0.5 py-1.5 text-base tabular-nums text-neutral-50 outline-none placeholder:text-neutral-600 sm:text-sm'
 const affix = 'shrink-0 text-sm text-neutral-400'
 
 /** Cursor-preserving onChange for comma-grouped money inputs (keeps the caret on the same digit). */
@@ -509,10 +510,11 @@ export default function App() {
   const eventImpacts = useMemo(() => runImpacts(inp), [inp])
 
   // Three FI tiers (lean/FI/fat) — all crossings computed in the Kotlin engine; here we just read them.
+  // Red → amber → green across the three tiers: leanFI (bare-minimum, risky) → FI → fatFI (comfortable).
   const tierMeta = [
-    { label: 'leanFI', icon: '🥗', color: '#34d399' },
-    { label: 'FI', icon: '🍽️', color: '#fb7185' },
-    { label: 'fatFI', icon: '🥩', color: '#fbbf24' },
+    { label: 'leanFI', icon: '🥗', color: '#f87171' },
+    { label: 'FI', icon: '🍽️', color: '#fbbf24' },
+    { label: 'fatFI', icon: '🥩', color: '#34d399' },
   ]
   const singleTiers = [
     { ...tierMeta[0], target: proj.leanTarget, years: proj.leanYears, age: proj.leanAge },
@@ -952,45 +954,40 @@ export default function App() {
               </ul>
             </details>
             <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-b from-emerald-500/[0.05] to-white/[0.015] p-5">
-              <div className="flex items-baseline justify-between">
-                <div className="text-sm font-medium text-neutral-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-neutral-100">
                   {active?.name ?? 'Plan'}
                   {showMc ? <span className="font-normal text-neutral-500"> · Monte Carlo median</span> : ''}
                 </div>
-                <div className="text-xs tabular-nums text-neutral-500">{pct(proj.savingsRate, 0)} saved</div>
+                <div className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium tabular-nums text-neutral-400">{pct(proj.savingsRate, 0)} saved</div>
               </div>
-              <div className="mt-4 grid grid-cols-3 divide-x divide-white/[0.08]">
+              <div className="mt-4 grid grid-cols-3 gap-2.5">
                 {heroTiers.map((t) => {
-                  const isFire = t.label === 'FI'
+                  const fin = Number.isFinite(t.years)
                   return (
-                    <div key={t.label} className="px-4 first:pl-0 last:pr-0">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: t.color }}>
-                        <span className="text-sm">{t.icon}</span>
+                    <div
+                      key={t.label}
+                      className="min-w-0 rounded-xl border p-3"
+                      style={{ borderColor: hexA(t.color, 0.22), background: hexA(t.color, 0.07) }}
+                    >
+                      <div className="flex items-center gap-1 text-sm font-semibold" style={{ color: t.color }}>
+                        <span className="text-base">{t.icon}</span>
                         {t.label}
                       </div>
-                      {Number.isFinite(t.years) ? (
-                        <>
-                          <div className={`mt-1.5 font-bold leading-none tabular-nums ${isFire ? 'text-[1.75rem] text-white' : 'text-xl text-neutral-300'}`}>
-                            {t.years.toFixed(1)}
-                            <span className="ml-1 text-xs font-medium text-neutral-500">yr</span>
-                          </div>
-                          <div className="mt-1 text-[11px] tabular-nums text-neutral-500">
-                            age {t.age} · {usdShort(t.target)}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="mt-1.5 text-xl font-semibold text-neutral-600">—</div>
-                          <div className="mt-1 text-[11px] tabular-nums text-neutral-500">{usdShort(t.target)} target</div>
-                        </>
-                      )}
+                      <div className={`mt-2 flex items-baseline gap-1 font-bold leading-none tabular-nums ${fin ? 'text-white' : 'text-neutral-600'}`}>
+                        <span className="text-2xl sm:text-[2.1rem]">{fin ? t.years.toFixed(1) : '—'}</span>
+                        {fin && <span className="text-xs font-medium text-neutral-400">yr</span>}
+                      </div>
+                      <div className="mt-1.5 text-[11px] tabular-nums text-neutral-500">
+                        {fin ? <>age {t.age} · {usdShort(t.target)}</> : <>{usdShort(t.target)} target</>}
+                      </div>
                     </div>
                   )
                 })}
               </div>
               <p className="mt-3 text-xs leading-relaxed text-neutral-400">
                 Scales your <span className="text-neutral-200">{usdShort(inp.retirementSpending ?? totalSpending(inp))}</span>{' '}
-                {inp.retirementSpending != null ? 'retirement' : 'annual'} spend (<span className="text-emerald-300/90">{Math.round(inp.leanFactor * 100)}%</span> · <span className="text-rose-300/90">100%</span> · <span className="text-amber-300/90">{Math.round(inp.fatFactor * 100)}%</span>) ÷ your{' '}
+                {inp.retirementSpending != null ? 'retirement' : 'annual'} spend (<span className="text-red-300/90">{Math.round(inp.leanFactor * 100)}%</span> · <span className="text-amber-300/90">100%</span> · <span className="text-emerald-300/90">{Math.round(inp.fatFactor * 100)}%</span>) ÷ your{' '}
                 <span className="text-neutral-200">{(inp.withdrawalRate * 100).toFixed(1)}%</span> withdrawal rate, grossed up for tax
                 {Math.round(proj.retirementEventCost) !== 0 && (
                   <>
@@ -1000,10 +997,10 @@ export default function App() {
                 )}
                 .
               </p>
-              <div className="mt-3 grid grid-cols-3 gap-3 border-t border-white/[0.06] pt-3">
-                <Stat label="Net worth @ FI" value={usdShort(nwAtRetire)} />
-                <Stat label="Portfolio @ retire" value={usdShort(proj.lifeLiquid[retireIdx])} hint={`age ${proj.retireAge}`} />
-                <Stat label="Plan survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `broke at ${proj.depletionAge}` : `lasts to ${inp.lifeExpectancy}`} />
+              <div className="mt-3 grid grid-cols-1 divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.02] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                <div className="px-4 py-3"><Stat label="Net worth @ FI" value={usdShort(nwAtRetire)} /></div>
+                <div className="px-4 py-3"><Stat label="Portfolio @ retire" value={usdShort(proj.lifeLiquid[retireIdx])} hint={`age ${proj.retireAge}`} /></div>
+                <div className="px-4 py-3"><Stat label="Plan survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `broke at ${proj.depletionAge}` : `lasts to ${inp.lifeExpectancy}`} /></div>
               </div>
               <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
                 <span className="mt-px text-sm leading-none">💡</span>
