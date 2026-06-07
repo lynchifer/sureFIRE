@@ -686,7 +686,7 @@ export default function App() {
     <div className="min-h-screen bg-[#0a0b0f] text-neutral-200">
       <div className="mx-auto max-w-6xl px-5 py-8">
         <header className="mb-5 flex items-center gap-3">
-          <img src="/logo.png" alt={`${brand}FIRE logo`} className="h-10 w-auto rounded-lg ring-1 ring-white/10" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt={`${brand}FIRE logo`} className="h-10 w-auto rounded-lg ring-1 ring-white/10" />
           <h1 className="text-2xl font-bold tracking-tight text-white">
             {brand}
             <span className="text-emerald-400">FIRE</span>
