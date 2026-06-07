@@ -15,14 +15,24 @@ fun weightedGrowthRate(
 
 /**
  * Total earned (salary) income at [age] in projection year [t]: your primary income (compounded by
- * income growth) plus the spouse's flat-real income once married, with either earner zeroed during a
- * matching sabbatical window. Earned income stops at the RE age — but that's the caller's drawdown
+ * income growth) plus the spouse's flat-real income once married, with either earner scaled down during
+ * a matching sabbatical window. Earned income stops at the RE age — but that's the caller's drawdown
  * branch, not here. With no spouse and no sabbaticals this is exactly `income·(1+growth)^t` (parity).
  */
 internal fun earnedIncome(inp: FixedInputs, age: Int, t: Int): Double {
-    fun paused(spouse: Boolean) = inp.sabbaticals.any { it.spouse == spouse && age >= it.startAge && age < it.startAge + it.years }
-    var earned = if (paused(false)) 0.0 else inp.income * (1.0 + inp.incomeGrowth).pow(t.toDouble())
-    if (inp.spouseIncomeStartAge in 0..age && !paused(true)) earned += inp.spouseIncome
+    // Fraction of an earner's income RETAINED at [age] after any overlapping sabbaticals (1.0 = full pay,
+    // 0.0 = full pause). Overlapping breaks on the same earner compound multiplicatively.
+    fun keptFactor(spouse: Boolean): Double {
+        var kept = 1.0
+        for (s in inp.sabbaticals) {
+            if (s.spouse == spouse && age >= s.startAge && age < s.startAge + s.years) {
+                kept *= (1.0 - s.reduction).coerceIn(0.0, 1.0)
+            }
+        }
+        return kept
+    }
+    var earned = inp.income * (1.0 + inp.incomeGrowth).pow(t.toDouble()) * keptFactor(false)
+    if (inp.spouseIncomeStartAge in 0..age) earned += inp.spouseIncome * keptFactor(true)
     return earned
 }
 

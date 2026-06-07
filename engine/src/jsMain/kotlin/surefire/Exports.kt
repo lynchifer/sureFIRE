@@ -82,6 +82,7 @@ class LifeEventInput(
     val spouseSpending: Double = 0.0, // marriage: extra annual household spending (begins at `age`, lasts through retirement)
     val spouseNetWorth: Double = 0.0, // marriage: spouse's net worth, a one-time lump into your liquid
     val spouse: Boolean = false,     // sabbatical: false = your income, true = the spouse's
+    val reduction: Double = 1.0,     // sabbatical: fraction of that earner's income removed (1.0 = full pause)
     val enabled: Boolean = true, // a disabled event is kept in the list but excluded from the projection
 )
 
@@ -106,8 +107,8 @@ fun marriageEvent(age: Int, ceremonyCost: Double, spouseIncome: Double, spouseSp
     LifeEventInput(kind = "marriage", age = age, ceremonyCost = ceremonyCost, spouseIncome = spouseIncome, spouseSpending = spouseSpending, spouseNetWorth = spouseNetWorth, enabled = enabled)
 
 @JsExport
-fun sabbaticalEvent(spouse: Boolean, startAge: Int, years: Int, enabled: Boolean): LifeEventInput =
-    LifeEventInput(kind = "sabbatical", spouse = spouse, startAge = startAge, years = years, enabled = enabled)
+fun sabbaticalEvent(spouse: Boolean, startAge: Int, years: Int, reduction: Double, enabled: Boolean): LifeEventInput =
+    LifeEventInput(kind = "sabbatical", spouse = spouse, startAge = startAge, years = years, reduction = reduction, enabled = enabled)
 
 /** Result of compiling life events: the cashflow/property primitives plus the two-earner extras. */
 private class Compiled(
@@ -144,7 +145,7 @@ private fun compileEvents(events: Array<LifeEventInput>): Compiled {
                     spouseStartAge = if (spouseStartAge < 0) e.age else minOf(spouseStartAge, e.age)
                 }
             }
-            "sabbatical" -> sabbaticals += Sabbatical(e.spouse, e.startAge, e.years)
+            "sabbatical" -> sabbaticals += Sabbatical(e.spouse, e.startAge, e.years, e.reduction)
             else -> cashFlows += Presets.customFlow(e.startAge, e.endAge, e.amount, e.income, e.inflates)
         }
     }

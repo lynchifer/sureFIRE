@@ -37,6 +37,16 @@ class MarriageSabbaticalTest {
     }
 
     @Test
+    fun partialSabbaticalScalesIncomeAndIsLighterThanAFullPause() {
+        val partial = reference().copy(sabbaticals = listOf(Sabbatical(spouse = false, startAge = 35, years = 2, reduction = 0.4)))
+        val p = projectFixed(partial)
+        for (age in 35..36) assertEquals(primaryAt(age) * 0.6, p.annualIncome[idx(partial, age)], 1e-6) // 40% cut keeps 60%
+        assertEquals(primaryAt(37), p.annualIncome[idx(partial, 37)], 1e-6) // full income resumes after the window
+        val fullPause = reference().copy(sabbaticals = listOf(Sabbatical(spouse = false, startAge = 35, years = 2))) // default reduction = 1.0
+        assertTrue(p.yearsToFire < projectFixed(fullPause).yearsToFire, "a partial break should delay FIRE less than a full pause")
+    }
+
+    @Test
     fun spouseSabbaticalPausesOnlyTheSpouseShare() {
         val married = reference().copy(spouseIncome = 40_000.0, spouseIncomeStartAge = 30)
         val withBreak = married.copy(sabbaticals = listOf(Sabbatical(spouse = true, startAge = 40, years = 2)))

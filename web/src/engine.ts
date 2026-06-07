@@ -163,7 +163,7 @@ function toEngineEvent(e: LifeEvent): LifeEventInput {
     case 'marriage':
       return marriageEvent(e.age, e.ceremonyCost, e.spouseIncome, e.spouseSpending, e.spouseNetWorth, on)
     case 'sabbatical':
-      return sabbaticalEvent(e.spouse, e.startAge, e.years, on)
+      return sabbaticalEvent(e.spouse, e.startAge, e.years, e.reduction ?? 1, on)
   }
 }
 

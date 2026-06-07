@@ -27,7 +27,7 @@ export type LifeEvent =
   | { id: string; enabled: boolean; name?: string; kind: 'oneTime'; age: number; amount: number; income: boolean; label: string }
   | { id: string; enabled: boolean; name?: string; kind: 'custom'; startAge: number; endAge: number; amount: number; income: boolean; inflates: boolean; label: string }
   | { id: string; enabled: boolean; name?: string; kind: 'marriage'; age: number; ceremonyCost: number; spouseIncome: number; spouseSpending: number; spouseNetWorth: number }
-  | { id: string; enabled: boolean; name?: string; kind: 'sabbatical'; spouse: boolean; startAge: number; years: number }
+  | { id: string; enabled: boolean; name?: string; kind: 'sabbatical'; spouse: boolean; startAge: number; years: number; reduction: number }
 
 /** A disabled event is excluded from the engine; treat a missing flag (older saved plans) as enabled. */
 export const isEnabled = (e: LifeEvent): boolean => e.enabled !== false
@@ -50,7 +50,7 @@ export function newEvent(kind: EventKind, currentAge: number): LifeEvent {
     case 'marriage':
       return { id, enabled: true, kind, age: currentAge + 1, ceremonyCost: D.marriageCeremonyCost, spouseIncome: D.marriageSpouseIncome, spouseSpending: D.marriageSpouseSpending, spouseNetWorth: D.marriageSpouseNetWorth }
     case 'sabbatical':
-      return { id, enabled: true, kind, spouse: false, startAge: currentAge + 5, years: D.sabbaticalYears }
+      return { id, enabled: true, kind, spouse: false, startAge: currentAge + 5, years: D.sabbaticalYears, reduction: 1 }
   }
 }
 

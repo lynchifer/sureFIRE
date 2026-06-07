@@ -317,16 +317,20 @@ export default function LifeEventsPanel({
                     </div>
                   )}
                   {e.kind === 'sabbatical' && (
-                    <div className="flex flex-wrap items-end gap-2">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[11px] uppercase tracking-wide text-neutral-400">Whose income</span>
-                        <div className="flex overflow-hidden rounded-md border border-white/10 text-[11px]">
-                          <button onClick={() => patch(e.id, { spouse: false })} className={`px-2 py-1 ${!e.spouse ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>You</button>
-                          <button onClick={() => patch(e.id, { spouse: true })} className={`px-2 py-1 ${e.spouse ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>Spouse</button>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[11px] uppercase tracking-wide text-neutral-400">Whose income</span>
+                          <div className="flex overflow-hidden rounded-md border border-white/10 text-[11px]">
+                            <button onClick={() => patch(e.id, { spouse: false })} className={`px-2 py-1 ${!e.spouse ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>You</button>
+                            <button onClick={() => patch(e.id, { spouse: true })} className={`px-2 py-1 ${e.spouse ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>Spouse</button>
+                          </div>
                         </div>
+                        <Num label="Start age" value={e.startAge} onChange={(v) => patch(e.id, { startAge: Math.round(v) })} />
+                        <Num label="Years" value={e.years} onChange={(v) => patch(e.id, { years: Math.round(v) })} />
+                        <Num label="Income cut" suffix="%" step={5} value={Math.round(e.reduction * 1000) / 10} onChange={(v) => patch(e.id, { reduction: Math.min(100, Math.max(0, v)) / 100 })} />
                       </div>
-                      <Num label="Start age" value={e.startAge} onChange={(v) => patch(e.id, { startAge: Math.round(v) })} />
-                      <Num label="Years" value={e.years} onChange={(v) => patch(e.id, { years: Math.round(v) })} />
+                      <p className="text-[11px] leading-snug text-neutral-500">100% = a full career break (no pay); a lower cut models part-time or lower-paying work — e.g. 40% keeps 60% of that income for the window.</p>
                     </div>
                   )}
                 </div>

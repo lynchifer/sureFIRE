@@ -17,13 +17,17 @@ data class CashFlow(
 )
 
 /**
- * A career break: one earner's income is paused over [startAge, startAge + years).
- * [spouse] = false pauses YOUR (primary) income, true pauses the spouse's.
+ * A career break: one earner's income is reduced over [startAge, startAge + years).
+ * [spouse] = false affects YOUR (primary) income, true the spouse's.
+ * [reduction] = the fraction of that earner's income removed during the break: 1.0 (the default) is a
+ * full pause — identical to the original behavior — while e.g. 0.4 models a 40% pay cut (60% retained,
+ * for part-time or lower-paying work). Clamped to [0,1] when applied.
  */
 data class Sabbatical(
     val spouse: Boolean,
     val startAge: Int,
     val years: Int,
+    val reduction: Double = 1.0,
 )
 
 /**
