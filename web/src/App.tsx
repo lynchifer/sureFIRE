@@ -536,9 +536,6 @@ export default function App() {
     }
   }
 
-  const proj = useMemo(() => runFixed(inp), [inp])
-  const allProj = useMemo(() => plans.map((p) => ({ plan: p, proj: runFixed(p.inputs) })), [plans])
-  const mc = useMemo(() => (mode === 'mc' && !compare ? runMonteCarlo(inp) : null), [inp, mode, compare])
   // The Monte Carlo readouts (recommended age + survival) cost ~100ms, so run them off a DEBOUNCED copy of
   // the inputs — the chart and tiers stay live while you type; these catch up ~150ms after you pause.
   const [mcInp, setMcInp] = useState(inp)
@@ -546,12 +543,17 @@ export default function App() {
     const t = setTimeout(() => setMcInp(inp), 150)
     return () => clearTimeout(t)
   }, [inp])
-  // Probability the plan lasts if you retire AT your chosen RE age (reuse the MC-mode result when shown,
-  // else run the life-path MC). runLifeSuccess returns 1 when there's no drawdown (retire at/after death).
-  const lifeSuccess = useMemo(() => (mc ? mc.lifeSuccessRate : runLifeSuccess(mcInp)), [mc, mcInp])
   // The recommended "don't go broke" RE age: the earliest age whose Monte Carlo drawdown clears ~80%
   // survival (risk-adjusted in the engine — so it IS the safe age, no separate reality-check needed).
   const recRetire = useMemo(() => recommendedRetireAge(mcInp), [mcInp])
+  // "Retire at" auto-tracks the recommended age until the user overrides it (sets a concrete retireAge).
+  const effInp = useMemo(() => (inp.retireAge == null ? { ...inp, retireAge: recRetire } : inp), [inp, recRetire])
+  const proj = useMemo(() => runFixed(effInp), [effInp])
+  const allProj = useMemo(() => plans.map((p) => ({ plan: p, proj: runFixed(p.inputs) })), [plans])
+  const mc = useMemo(() => (mode === 'mc' && !compare ? runMonteCarlo(effInp) : null), [effInp, mode, compare])
+  // Probability the plan lasts if you retire AT the effective RE age (reuse the MC-mode result when shown,
+  // else run the life-path MC). runLifeSuccess returns 1 when there's no drawdown (retire at/after death).
+  const lifeSuccess = useMemo(() => (mc ? mc.lifeSuccessRate : runLifeSuccess(inp.retireAge == null ? { ...mcInp, retireAge: recRetire } : mcInp)), [mc, mcInp, recRetire, inp.retireAge])
   const eventColors = inp.lifeEvents.map((_, i) => EVENT_COLORS[i % EVENT_COLORS.length])
   // Per-event marginal FIRE-date impact — computed entirely in the engine (eventImpactsJs).
   const eventImpacts = useMemo(() => runImpacts(inp), [inp])
@@ -848,8 +850,13 @@ export default function App() {
               <Field label="Current age" value={inp.currentAge} defaultValue={DEFAULTS.currentAge} onChange={(v) => set('currentAge', Math.round(v))} error={verr.currentAge} />
               <Field label="Expected death" suffix="yrs" step={1} help="Age your retirement balance is drawn down to. ~95 is conservative." value={inp.lifeExpectancy} defaultValue={DEFAULTS.lifeExpectancy} onChange={(v) => set('lifeExpectancy', v)} error={verr.lifeExpectancy} />
               <Field label="Investments" prefix="$" step={1000} value={inp.initialInvestments} defaultValue={DEFAULTS.initialInvestments} onChange={(v) => set('initialInvestments', v)} error={verr.initialInvestments} />
-              <div className="col-span-2">
-                <OptionalField label="Retire at" help="Age you stop working — income ends, drawdown begins. Below your SS age models an early-retirement bridge; blank = retire when SS starts." value={inp.retireAge} placeholder={claimAge} onChange={(v) => set('retireAge', v)} error={verr.retireAge} />
+              <div className="col-span-2 space-y-1">
+                <OptionalField label="Retire at" help="Auto-set to the recommended age — the earliest with ~80% market survival. Type to override (e.g. an earlier, riskier age); clear it to track the recommendation again." value={inp.retireAge} placeholder={recRetire} onChange={(v) => set('retireAge', v)} error={verr.retireAge} />
+                {inp.retireAge == null ? (
+                  <p className="px-1 text-[11px] text-neutral-500">Auto · using recommended age <span className="font-medium text-emerald-400">{recRetire}</span></p>
+                ) : (
+                  <button type="button" onClick={() => set('retireAge', undefined)} className="px-1 text-left text-[11px] text-emerald-400 underline decoration-dotted underline-offset-2 hover:text-emerald-300">↺ Use recommended ({recRetire})</button>
+                )}
               </div>
             </Section>
             <Section title="Cash flow" accent="#60a5fa">
