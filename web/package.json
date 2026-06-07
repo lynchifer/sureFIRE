@@ -10,10 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "surefire-engine": "file:../engine/build/dist/js/productionLibrary",
-    "plotly.js-dist-min": "^3.5.1",
+    "echarts": "^6.1.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "surefire-engine": "file:../engine/build/dist/js/productionLibrary"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,32 +1,30 @@
 import { useEffect, useRef } from 'react'
-import Plotly from 'plotly.js-dist-min'
+import * as echarts from 'echarts'
+import type { EChartsOption } from 'echarts'
 
-export default function Chart({
-  data,
-  layout,
-  className,
-}: {
-  data: unknown[]
-  layout: Record<string, unknown>
-  className?: string
-}) {
+/** Thin Apache ECharts wrapper. Inits once, re-applies the option on change (notMerge so switching
+ *  modes fully replaces series/marks), and resizes with the container. */
+export default function Chart({ option, height, className }: { option: EChartsOption; height: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
-  // Reserve the chart's height up front. With responsive:true Plotly fits the container, so if the
-  // div mounts at 0 height (before the grid settles) the absolutely-positioned SVG overflows and
-  // overlaps the panels below until a resize. An explicit height keeps the container sized at mount.
-  const height = typeof layout.height === 'number' ? (layout.height as number) : undefined
+  const inst = useRef<echarts.ECharts | null>(null)
 
   useEffect(() => {
     const el = ref.current
-    if (el) void Plotly.react(el, data, layout, { displayModeBar: false, responsive: true })
-  }, [data, layout])
-
-  useEffect(() => {
-    const el = ref.current
+    if (!el) return
+    const chart = echarts.init(el, undefined, { renderer: 'canvas' })
+    inst.current = chart
+    const ro = new ResizeObserver(() => chart.resize())
+    ro.observe(el)
     return () => {
-      if (el) Plotly.purge(el)
+      ro.disconnect()
+      chart.dispose()
+      inst.current = null
     }
   }, [])
 
-  return <div ref={ref} className={className} style={{ height }} />
+  useEffect(() => {
+    inst.current?.setOption(option, true)
+  }, [option])
+
+  return <div ref={ref} className={className} style={{ height, width: '100%' }} />
 }

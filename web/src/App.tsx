@@ -3,6 +3,7 @@ import type { ChangeEvent, ReactNode } from 'react'
 import { runFixed, runMonteCarlo, runLifeSuccess, recommendedRetireAge, runImpacts, socialSecurityBenefit, totalSpending, DEFAULTS } from './engine'
 import type { FireInputs, ProjView } from './engine'
 import Chart from './Chart'
+import type { EChartsOption } from 'echarts'
 import { usdShort, pct } from './format'
 import { listPlans, savePlan, deletePlan } from './api'
 import type { PlanDTO } from './api'
@@ -293,32 +294,27 @@ const sliceEnd = (proj: ProjView) => {
   return Number.isFinite(end) ? Math.min(Math.ceil(end) + 6, last) : last
 }
 
-/** Overlay traces (a liquid line + FIRE marker) for one profile in compare mode. */
-function compareTraces(plan: PlanDTO, proj: ProjView, color: string): unknown[] {
+/** Overlay ECharts series (a liquid line + open FI marker) for one profile in compare mode. */
+function compareSeries(plan: PlanDTO, proj: ProjView, color: string): unknown[] {
   const e = sliceEnd(proj)
-  const traces: unknown[] = [
-    {
-      x: proj.ages.slice(0, e + 1),
-      y: proj.liquid.slice(0, e + 1),
-      type: 'scatter',
-      mode: 'lines',
-      name: plan.name,
-      line: { color, width: 2 },
-      hovertemplate: `${plan.name}: %{y:$,.0f}<extra></extra>`,
-    },
+  const xs = proj.ages.slice(0, e + 1)
+  const ys = proj.liquid.slice(0, e + 1)
+  const series: unknown[] = [
+    { name: plan.name, type: 'line', showSymbol: false, lineStyle: { color, width: 2 }, itemStyle: { color }, emphasis: { disabled: true }, data: xs.map((xx, i) => [xx, ys[i]]) },
   ]
   if (Number.isFinite(proj.yearsToFire)) {
-    traces.push({
-      x: [plan.inputs.currentAge + proj.yearsToFire],
-      y: [proj.fireTarget],
+    series.push({
+      name: plan.name + ' FI',
       type: 'scatter',
-      mode: 'markers',
-      showlegend: false,
-      marker: { color, size: 10, symbol: 'circle-open', line: { width: 2 } },
-      hovertemplate: `${plan.name} FI<extra></extra>`,
+      symbol: 'circle',
+      symbolSize: 11,
+      itemStyle: { color: 'transparent', borderColor: color, borderWidth: 2 },
+      data: [[plan.inputs.currentAge + proj.yearsToFire, proj.fireTarget]],
+      tooltip: { show: false },
+      silent: true,
     })
   }
-  return traces
+  return series
 }
 
 type PctKey =
@@ -333,13 +329,60 @@ type PctKey =
   | 'bondReturn'
   | 'inflation'
 
-const baseAxes = {
-  paper_bgcolor: 'rgba(0,0,0,0)',
-  plot_bgcolor: 'rgba(0,0,0,0)',
-  font: { color: '#9ca3af', size: 13 },
-  hoverlabel: { bgcolor: '#111318', bordercolor: 'rgba(255,255,255,0.08)', font: { color: '#e5e7eb', size: 13 } },
-  xaxis: { title: { text: 'Age', font: { size: 13 } }, gridcolor: 'rgba(255,255,255,0.05)', zeroline: false, tickfont: { size: 12 } },
-  yaxis: { tickprefix: '$', tickformat: '.2s', gridcolor: 'rgba(255,255,255,0.05)', zeroline: false, tickfont: { size: 12 } },
+// --- ECharts shared styling ------------------------------------------------------------------------
+const fmtAxisMoney = (v: number): string => {
+  const a = Math.abs(v)
+  if (a >= 1e6) return '$' + (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M'
+  if (a >= 1e3) return '$' + Math.round(v / 1e3) + 'k'
+  return '$' + Math.round(v)
+}
+const fmtFullMoney = (v: number | null | undefined): string => (v == null || Number.isNaN(v) ? '—' : '$' + Math.round(v).toLocaleString('en-US'))
+const ECH_GRID = { left: 6, right: 14, top: 14, bottom: 30, containLabel: true }
+// Axis tooltip that skips null points and internal helper series (band baselines, %-named bands), and
+// handles both category-axis (value = number) and value-axis (value = [x, y]) series.
+const axisTooltipFormatter = (ps: unknown): string => {
+  const rows = (ps as Array<{ seriesName?: string; value?: number | unknown[]; marker?: string }>)
+    .map((p) => ({ name: p.seriesName ?? '', marker: p.marker ?? '', val: Array.isArray(p.value) ? (p.value[1] as number) : (p.value as number) }))
+    .filter((p) => p.val != null && !Number.isNaN(p.val) && p.name && !p.name.includes('·base') && !p.name.includes('%'))
+  if (!rows.length) return ''
+  const head = (ps as Array<{ axisValueLabel?: string; axisValue?: string | number }>)[0]
+  const age = head?.axisValueLabel ?? head?.axisValue ?? ''
+  return `Age ${typeof age === 'number' ? Math.round(age) : age}` + rows.map((p) => `<br/>${p.marker} ${p.name}: ${fmtFullMoney(p.val)}`).join('')
+}
+const ECH_TOOLTIP = {
+  trigger: 'axis' as const,
+  backgroundColor: '#111318',
+  borderColor: 'rgba(255,255,255,0.08)',
+  borderWidth: 1,
+  textStyle: { color: '#e5e7eb', fontSize: 13 },
+  formatter: axisTooltipFormatter,
+}
+const ECH_TEXT = { color: '#9ca3af', fontFamily: 'inherit' }
+const echXAxisCat = (cats: string[]) => ({
+  type: 'category' as const,
+  data: cats,
+  boundaryGap: false,
+  name: 'Age',
+  nameLocation: 'middle' as const,
+  nameGap: 24,
+  nameTextStyle: { color: '#9ca3af', fontSize: 12 },
+  axisLine: { lineStyle: { color: 'rgba(255,255,255,0.15)' } },
+  axisTick: { show: false },
+  axisLabel: { color: '#9ca3af', fontSize: 11 },
+  splitLine: { show: false },
+})
+const echYAxis = (o: { log?: boolean; min?: number; max?: number }) => ({
+  type: (o.log ? 'log' : 'value') as 'log' | 'value',
+  min: o.min,
+  max: o.max,
+  axisLine: { show: false },
+  axisTick: { show: false },
+  axisLabel: { color: '#9ca3af', fontSize: 11, formatter: fmtAxisMoney },
+  splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+})
+const hexA = (hex: string, a: number): string => {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
 }
 
 export default function App() {
@@ -538,180 +581,135 @@ export default function App() {
   const toneFor = (r: number) => (r >= 0.8 ? 'text-emerald-300' : r >= 0.5 ? 'text-amber-300' : 'text-rose-400') // risk-graded color
   const hasAssets = inp.cashBucket > 0 || inp.lifeEvents.some((e) => e.kind === 'home')
   const x = proj.ages.slice(0, deathIdx + 1)
-  const accX = proj.ages.slice(0, retireIdx + 1) // accumulation phase (stacked decomposition)
-  const drawX = proj.ages.slice(retireIdx, deathIdx + 1) // retirement drawdown phase
   const lifeSlice = proj.lifeLiquid.slice(0, deathIdx + 1)
 
-  // A wildly over-funded plan compounds so far past the tiers that a linear axis squashes everything
-  // flat. When the balance stays positive and dwarfs fatFIRE, switch to a log axis (and one balance
-  // line — stacked areas are meaningless on a log scale); otherwise stay linear, capped to the
-  // actionable region with a small negative band if the money runs out.
-  const lifeMax = Math.max(...lifeSlice)
-  const lifeMin = Math.min(...lifeSlice)
-  const useLog = lifeMin > 0 && lifeMax > proj.fatTarget * 2.5
+  // Always linear, capped to the actionable accumulation region (so the stacked Initial/Saved/Returns +
+  // home-equity bands stay readable). A wildly over-funded plan's drawdown compounds off the top of the
+  // frame — that's fine: it's clipped and labelled with the ↑ end-value annotation instead of switching
+  // to a log axis (where stacked areas are meaningless). A small negative band shows if the money runs out.
   const accMax = Math.max(inp.initialInvestments, ...proj.liquid.slice(0, retireIdx + 1))
   const drawMin = hasRetirement ? Math.min(...proj.lifeLiquid.slice(retireIdx, deathIdx + 1)) : accMax
-  const yTop = Math.max(proj.fatTarget, accMax) * 1.18
+  // Fit the axis to the whole life (accumulation + drawdown/net-worth peak) so nothing shoots off-frame.
+  const yTop = Math.max(proj.fatTarget, accMax, ...proj.lifeNetWorth.slice(0, deathIdx + 1)) * 1.05
   const yBottom = drawMin < 0 ? -0.25 * yTop : 0
 
-  const band = (name: string, y: number[], color: string) => ({
-    x: accX,
-    y,
-    type: 'scatter',
-    mode: 'lines',
-    name,
-    line: { width: 0, color },
-    fillcolor: color,
-    stackgroup: 'one',
-    hovertemplate: `${name}: %{y:$,.0f}<extra></extra>`,
-  })
-  const netWorthTrace = { x, y: proj.lifeNetWorth.slice(0, deathIdx + 1), type: 'scatter', mode: 'lines', name: 'Net worth', line: { color: C.netWorth, width: 2, dash: 'dot' }, hovertemplate: 'Net worth: %{y:$,.0f}<extra></extra>' }
-  // Two timeline markers: you RETIRE (income stops, drawdown begins) at the RE age, then — if that's
-  // earlier than your claim age — SOCIAL SECURITY begins later, ending the bridge. They coincide (one
-  // marker) when you retire exactly at your claim age.
-  const retireMarker = { x: [proj.ages[retireIdx]], y: [proj.lifeLiquid[retireIdx]], type: 'scatter', mode: 'markers', name: 'Retire', showlegend: false, marker: { color: C.fire, size: 12, symbol: 'circle', line: { color: '#0a0b0f', width: 2 } }, hovertemplate: `Retire at ${proj.retireAge}<extra></extra>` }
   const claimAge = proj.claimAge // Social Security claim age (clamped 62–70 in the engine)
   const claimIdx = claimAge - inp.currentAge
   const showSsMarker = inp.socialSecurity > 0 && claimAge > proj.retireAge && claimIdx <= deathIdx // a real bridge
-  const ssMarker = { x: [proj.ages[claimIdx]], y: [proj.lifeLiquid[claimIdx]], type: 'scatter', mode: 'markers', name: 'Social Security', showlegend: false, marker: { color: '#fbbf24', size: 11, symbol: 'diamond', line: { color: '#0a0b0f', width: 2 } }, hovertemplate: `Social Security at ${claimAge}<extra></extra>` }
-  // VPW/Guardrails flex spending, which bends the retirement-balance line (VPW winds it down toward $0,
-  // Guardrails dips/rises) — that's the on-chart "tell". We used to also plot a spending line on a second
-  // y-axis, but for an over-funded plan it scaled to absurd $-hundreds-of-thousands and looked broken, so
-  // the balance line + a caption carry it instead.
+  // VPW/Guardrails flex spending bends the retirement-balance line — that's the on-chart "tell".
   const flexStrategy = hasRetirement && inp.withdrawalStrategy !== 'fixed'
-  // Tier labels (🥗 leanFI etc.) as a text TRACE pinned to the left — annotations with yref:'y' silently
-  // fail to render once a secondary y-axis exists, but a scatter-text trace draws reliably in data coords.
-  const financedTiers = singleTiers.filter((t) => Number.isFinite(t.years))
-  const tierLabelTrace = { x: financedTiers.map(() => x[0]), y: financedTiers.map((t) => t.target), type: 'scatter', mode: 'text', text: financedTiers.map((t) => `${t.icon} ${t.label}`), textposition: 'top right', textfont: { color: financedTiers.map((t) => t.color), size: 11 }, showlegend: false, hoverinfo: 'skip', cliponaxis: false }
 
-  const singleData = useLog
-    ? [
-        { x, y: lifeSlice, type: 'scatter', mode: 'lines', name: 'Balance', line: { color: C.drawdown, width: 2.5 }, hovertemplate: 'Balance: %{y:$,.0f}<extra></extra>' },
-        ...(hasAssets ? [netWorthTrace] : []),
-        tierLabelTrace,
-        ...(hasRetirement ? [retireMarker] : []),
-        ...(showSsMarker ? [ssMarker] : []),
-      ]
-    : [
-        band('Initial', accX.map(() => inp.initialInvestments), C.initial),
-        band('Saved', proj.saved.slice(0, retireIdx + 1).map((s) => s - inp.initialInvestments), C.saved),
-        band('Returns', proj.returns.slice(0, retireIdx + 1), C.returns),
-        // Retirement drawdown: investable balance from retirement down to the death age.
-        ...(hasRetirement
-          ? [{ x: drawX, y: proj.lifeLiquid.slice(retireIdx, deathIdx + 1), type: 'scatter', mode: 'lines', name: 'Retirement balance', line: { color: C.drawdown, width: 2.5 }, hovertemplate: 'Retirement: %{y:$,.0f}<extra></extra>' }]
-          : []),
-        ...(hasAssets ? [netWorthTrace] : []),
-        tierLabelTrace,
-        ...(hasRetirement ? [retireMarker] : []),
-        ...(showSsMarker ? [ssMarker] : []),
-      ]
+  // --- shared ECharts series builders -------------------------------------------------------------
+  const netWorthSeries = { name: 'Net worth', type: 'line', symbol: 'none', emphasis: { disabled: true }, lineStyle: { color: C.netWorth, width: 2, type: 'dotted' }, data: proj.lifeNetWorth.slice(0, deathIdx + 1) }
+  // Dashed horizontal tier lines, each labelled (🥗 leanFI …) at the left edge — drawn via markLine.
+  const tierSeries = (tiers: typeof singleTiers) => ({
+    type: 'line',
+    data: [],
+    silent: true,
+    markLine: {
+      silent: true,
+      symbol: 'none',
+      data: tiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ yAxis: t.target, lineStyle: { color: t.color, type: 'dashed', width: 1.25 }, label: { show: true, formatter: `${t.icon} ${t.label}`, position: 'insideStartTop', color: t.color, fontSize: 10 } })),
+    },
+  })
 
-  const hexA = (hex: string, a: number) => {
-    const n = parseInt(hex.slice(1), 16)
-    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
-  }
-  // Disabled events are excluded from the engine, so drop their bands/icons from the chart too.
-  const eventVis = inp.lifeEvents
-    .map((e, i) => ({ color: eventColors[i], span: eventSpan(e), icon: eventIcon(e), start: eventAge(e), on: isEnabled(e) }))
-    .filter((v) => v.on)
+  // --- life-event flag lane (shared by Fixed & Monte Carlo) ---------------------------------------
+  const eventVis = inp.lifeEvents.map((e, i) => ({ color: eventColors[i], span: eventSpan(e), icon: eventIcon(e), start: eventAge(e), on: isEnabled(e) })).filter((v) => v.on)
   const chartEnd = x[x.length - 1]
-  // Life-event markers as a "flag" lane: each event is a dotted stem at its exact start age topped by
-  // an icon chip. Events that fall too close together in age step DOWN into separate lanes so the chips
-  // never overlap (the old version pinned every icon to the same y, so clustered events collided).
   const evRangeYears = Math.max(1, chartEnd - x[0])
   const laneLastX: number[] = []
-  const placedEvents = [...eventVis]
-    .sort((a, b) => a.start - b.start)
-    .map((v) => {
-      let lane = 0
-      while (lane < laneLastX.length && v.start - laneLastX[lane] < evRangeYears * 0.04) lane++
-      laneLastX[lane] = v.start
-      return { ...v, lane }
-    })
-  const laneY = (lane: number) => 0.985 - lane * 0.07 // paper-y of the chip; clustered events step downward
-  const eventShapes = [
-    // Faint full-height band over a duration event's span (clamp an indefinitely-held home to the edge).
-    ...placedEvents
-      .filter((v) => v.span[1] > v.span[0])
-      .map((v) => ({ type: 'rect', xref: 'x', yref: 'paper', x0: v.span[0], x1: Number.isFinite(v.span[1]) ? v.span[1] : chartEnd, y0: 0, y1: 1, fillcolor: hexA(v.color, 0.06), line: { width: 0 }, layer: 'below' })),
-    // A dotted stem from the axis up to each event's chip, marking its exact start age.
-    ...placedEvents.map((v) => ({ type: 'line', xref: 'x', yref: 'paper', x0: v.start, x1: v.start, y0: 0, y1: laneY(v.lane), line: { color: hexA(v.color, 0.4), width: 1, dash: 'dot' } })),
-  ]
-  // Icon chips at the top of each stem, stacked by lane so they never overlap. Kept slim (small glyph,
-  // tight padding, faint hairline border) so a cluster of early-life events doesn't crowd the corner.
-  const eventAnnotations = placedEvents.map((v) => ({
-    x: v.start,
-    y: laneY(v.lane),
-    yref: 'paper',
-    yanchor: 'middle',
-    xanchor: 'center',
-    text: v.icon,
-    showarrow: false,
-    font: { size: 13 },
-    bgcolor: 'rgba(12,14,19,0.85)',
-    bordercolor: hexA(v.color, 0.55),
-    borderwidth: 1,
-    borderpad: 2,
-  }))
-
-  const singleLayout = {
-    ...baseAxes,
-    xaxis: { ...baseAxes.xaxis, range: [x[0], x[x.length - 1]] },
-    yaxis: useLog
-      ? { ...baseAxes.yaxis, type: 'log', dtick: 1, tickformat: '~s' } // decades only ($1M·$10M·$100M) — no minor-tick clutter
-      : { ...baseAxes.yaxis, range: [yBottom, yTop] },
-    height: chartHeight,
-    margin: { l: 66, r: 20, t: 16, b: 64 },
-    hovermode: 'x unified',
-    legend: { orientation: 'h', y: -0.16, x: 0.5, xanchor: 'center', font: { size: 12 } },
-    shapes: [
-      ...singleTiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ type: 'line', xref: 'x', yref: 'y', x0: x[0], x1: x[x.length - 1], y0: t.target, y1: t.target, line: { color: t.color, width: 1.25, dash: 'dash' } })),
-      ...eventShapes,
-    ],
-    annotations: [
-      // When the (linear) retirement balance compounds off the top of the frame, label its end value.
-      ...(!useLog && hasRetirement && proj.lifeLiquid[deathIdx] > yTop
-        ? [{ x: x[x.length - 1], y: yTop * 0.95, xref: 'x', yref: 'y', xanchor: 'right', yanchor: 'top', text: `↑ ${usdShort(proj.lifeLiquid[deathIdx])} by ${inp.lifeExpectancy}`, showarrow: false, font: { color: C.drawdown, size: 10 } }]
-        : []),
-      ...eventAnnotations,
-    ],
+  const placedEvents = [...eventVis].sort((a, b) => a.start - b.start).map((v) => {
+    let lane = 0
+    while (lane < laneLastX.length && v.start - laneLastX[lane] < evRangeYears * 0.04) lane++
+    laneLastX[lane] = v.start
+    return { ...v, lane }
+  })
+  // A silent overlay series carrying: faint full-height duration bands (markArea), dotted stems
+  // (markLine) and icon chips + point markers (markPoint). `yTopVal` positions the icon lane near the top.
+  const eventOverlay = (yTopVal: number, log: boolean, extraPoints: unknown[]) => {
+    const iconY = (lane: number) => (log ? yTopVal / Math.pow(2.4, lane) : yTopVal * (0.97 - lane * 0.07))
+    const area = placedEvents.filter((v) => v.span[1] > v.span[0]).map((v) => [{ xAxis: String(Math.round(v.span[0])), itemStyle: { color: hexA(v.color, 0.06) } }, { xAxis: String(Math.round(Math.min(Number.isFinite(v.span[1]) ? v.span[1] : chartEnd, chartEnd))) }])
+    const stems = log ? [] : placedEvents.map((v) => [{ coord: [String(v.start), 0], lineStyle: { color: hexA(v.color, 0.4), type: 'dotted', width: 1 } }, { coord: [String(v.start), iconY(v.lane)] }])
+    const icons = placedEvents.map((v) => ({ coord: [String(v.start), iconY(v.lane)], symbolSize: 0, label: { show: true, formatter: v.icon, fontSize: 13, backgroundColor: 'rgba(12,14,19,0.85)', borderColor: hexA(v.color, 0.55), borderWidth: 1, padding: 3, borderRadius: 4 } }))
+    return {
+      type: 'line',
+      data: [],
+      silent: true,
+      z: 6,
+      markArea: area.length ? { silent: true, data: area } : undefined,
+      markLine: stems.length ? { silent: true, symbol: 'none', label: { show: false }, data: stems } : undefined,
+      markPoint: { silent: true, data: [...icons, ...extraPoints] },
+    }
   }
 
-  const compareData = allProj.flatMap(({ plan, proj: pr }, i) => compareTraces(plan, pr, PLAN_COLORS[i % PLAN_COLORS.length]))
-  const compareLayout = { ...baseAxes, height: chartHeight, margin: { l: 66, r: 24, t: 16, b: 64 }, hovermode: 'closest', legend: { orientation: 'h', y: -0.16, x: 0.5, xanchor: 'center', font: { size: 12 } } }
+  // --- Fixed (single) -----------------------------------------------------------------------------
+  const xCat = x.map(String)
+  const bandSeries = (name: string, data: (number | null)[], color: string) => ({ name, type: 'line', stack: 'acc', symbol: 'none', emphasis: { disabled: true }, lineStyle: { width: 0 }, areaStyle: { color }, connectNulls: false, data })
+  const initData = x.map((_, i) => (i <= retireIdx ? inp.initialInvestments : null))
+  const savedData = x.map((_, i) => (i <= retireIdx ? proj.saved[i] - inp.initialInvestments : null))
+  const returnsData = x.map((_, i) => (i <= retireIdx ? proj.returns[i] : null))
+  const drawData = x.map((_, i) => (hasRetirement && i >= retireIdx ? proj.lifeLiquid[i] : null))
+  // Home equity = the tracked homeValue − amortizing mortgageBalance. Shade it as a band stacked on top
+  // of the liquid balance, so the gap between the balance and net-worth lines literally reads as equity.
+  const homeEquity = x.map((_, i) => (proj.homeValue[i] ?? 0) - (proj.mortgageBalance[i] ?? 0))
+  const hasHomeEquity = Math.max(0, ...homeEquity) > 1
+  const equityBand = hasHomeEquity
+    ? [
+        { name: 'nw·base', type: 'line', stack: 'nw', symbol: 'none', lineStyle: { width: 0 }, areaStyle: { opacity: 0 }, silent: true, tooltip: { show: false }, data: lifeSlice },
+        { name: 'Home equity', type: 'line', stack: 'nw', symbol: 'none', lineStyle: { width: 0 }, areaStyle: { color: hexA(C.netWorth, 0.13) }, silent: true, tooltip: { show: false }, data: homeEquity },
+      ]
+    : []
+  // With a home in play, the tooltip breaks net worth into its tracked parts (balance + equity − mortgage [+ cash]).
+  const wealthTooltip = (ps: unknown): string => {
+    const arr = ps as Array<{ axisValue?: string | number }>
+    const age = Number(arr[0]?.axisValue)
+    const i = age - inp.currentAge
+    if (!(i >= 0 && i < x.length)) return ''
+    const dot = (c: string) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:6px;vertical-align:middle"></span>`
+    const rows = [`${dot(C.drawdown)}Balance: ${fmtFullMoney(lifeSlice[i])}`]
+    if (homeEquity[i] > 1) rows.push(`${dot(C.netWorth)}Home equity: ${fmtFullMoney(homeEquity[i])}`)
+    const mort = proj.mortgageBalance[i] ?? 0
+    if (mort > 1) rows.push(`<span style="opacity:.55">&nbsp;&nbsp;mortgage −${fmtFullMoney(mort)}</span>`)
+    if ((proj.cash[i] ?? 0) > 1) rows.push(`${dot('#94a3b8')}Cash reserve: ${fmtFullMoney(proj.cash[i])}`)
+    rows.push(`<b>Net worth: ${fmtFullMoney(proj.lifeNetWorth[i])}</b>`)
+    return `Age ${age}<br/>` + rows.join('<br/>')
+  }
+  const singleMarkers: unknown[] = []
+  if (hasRetirement) singleMarkers.push({ coord: [String(proj.ages[retireIdx]), proj.lifeLiquid[retireIdx]], symbol: 'circle', symbolSize: 11, itemStyle: { color: C.fire, borderColor: '#0a0b0f', borderWidth: 2 }, label: { show: false } })
+  if (showSsMarker) singleMarkers.push({ coord: [String(proj.ages[claimIdx]), proj.lifeLiquid[claimIdx]], symbol: 'diamond', symbolSize: 12, itemStyle: { color: '#fbbf24', borderColor: '#0a0b0f', borderWidth: 2 }, label: { show: false } })
+  const singleSeries =[bandSeries('Initial', initData, C.initial), bandSeries('Saved', savedData, C.saved), bandSeries('Returns', returnsData, C.returns), ...equityBand, ...(hasRetirement ? [{ name: 'Retirement balance', type: 'line', symbol: 'none', emphasis: { disabled: true }, connectNulls: false, lineStyle: { color: C.drawdown, width: 2.5 }, data: drawData }] : []), ...(hasAssets ? [netWorthSeries] : []), tierSeries(singleTiers), eventOverlay(yTop, false, singleMarkers)]
+  const singleOption = { backgroundColor: 'transparent', textStyle: ECH_TEXT, grid: ECH_GRID, tooltip: hasHomeEquity ? { ...ECH_TOOLTIP, formatter: wealthTooltip } : ECH_TOOLTIP, xAxis: echXAxisCat(xCat), yAxis: echYAxis({ min: yBottom, max: yTop }), series: singleSeries } as unknown as EChartsOption
 
+  // --- Compare ------------------------------------------------------------------------------------
+  const compareOption = {
+    backgroundColor: 'transparent',
+    textStyle: ECH_TEXT,
+    grid: { ...ECH_GRID, top: 34 },
+    tooltip: { ...ECH_TOOLTIP, axisPointer: { type: 'line' } },
+    legend: { show: true, top: 4, textStyle: { color: '#9ca3af', fontSize: 12 }, data: allProj.map(({ plan }) => plan.name) },
+    xAxis: { type: 'value', name: 'Age', nameLocation: 'middle', nameGap: 24, nameTextStyle: { color: '#9ca3af', fontSize: 12 }, scale: true, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.15)' } }, axisTick: { show: false }, axisLabel: { color: '#9ca3af', fontSize: 11 }, splitLine: { show: false } },
+    yAxis: echYAxis({ min: 0 }),
+    series: allProj.flatMap(({ plan, proj: pr }, i) => compareSeries(plan, pr, PLAN_COLORS[i % PLAN_COLORS.length])),
+  } as unknown as EChartsOption
+
+  // --- Monte Carlo --------------------------------------------------------------------------------
   const showMc = mode === 'mc' && !compare && mc !== null
   const heroTiers = showMc && mc ? mcTiers : singleTiers
   const mcEndYears = mc ? (Number.isFinite(mc.fatMedianYears) ? mc.fatMedianYears : mc.medianYears) : NaN
   const mcEnd = mc ? (Number.isFinite(mcEndYears) ? Math.min(Math.ceil(mcEndYears) + 6, mc.ages.length - 1) : mc.ages.length - 1) : 0
   const mcx = mc ? mc.ages.slice(0, mcEnd + 1) : []
-  const mcBand = (lo: number[], hi: number[], fill: string, name: string) => [
-    { x: mcx, y: hi.slice(0, mcEnd + 1), type: 'scatter', mode: 'lines', line: { width: 0 }, showlegend: false, hoverinfo: 'skip' },
-    { x: mcx, y: lo.slice(0, mcEnd + 1), type: 'scatter', mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: fill, name, hovertemplate: `${name}: %{y:$,.0f}<extra></extra>` },
+  const mcxCat = mcx.map(String)
+  // Confidence band = transparent baseline (lo) + stacked area of (hi − lo), so the fill spans lo→hi.
+  const mcBandSeries = (lo: number[], hi: number[], fill: string, key: string) => [
+    { name: key + '·base', type: 'line', stack: key, symbol: 'none', lineStyle: { width: 0 }, areaStyle: { opacity: 0 }, silent: true, tooltip: { show: false }, data: lo.slice(0, mcEnd + 1) },
+    { name: key, type: 'line', stack: key, symbol: 'none', lineStyle: { width: 0 }, areaStyle: { color: fill }, silent: true, tooltip: { show: false }, data: hi.slice(0, mcEnd + 1).map((h, i) => h - lo[i]) },
   ]
-  const mcFinanced = mcTiers.filter((t) => Number.isFinite(t.years))
-  const mcTierLabels = { x: mcFinanced.map(() => mcx[0]), y: mcFinanced.map((t) => t.target), type: 'scatter', mode: 'text', text: mcFinanced.map((t) => `${t.icon} ${t.label}`), textposition: 'top right', textfont: { color: mcFinanced.map((t) => t.color), size: 11 }, showlegend: false, hoverinfo: 'skip', cliponaxis: false }
-  const mcData = mc
-    ? [
-        ...mcBand(mc.p10, mc.p90, 'rgba(96,165,250,0.12)', '10–90%'),
-        ...mcBand(mc.p25, mc.p75, 'rgba(96,165,250,0.22)', '25–75%'),
-        { x: mcx, y: mc.p50.slice(0, mcEnd + 1), type: 'scatter', mode: 'lines', line: { color: '#93c5fd', width: 2 }, name: 'Median', hovertemplate: 'Median: %{y:$,.0f}<extra></extra>' },
-        mcTierLabels,
-        ...mcTiers
-          .filter((t) => Number.isFinite(t.years))
-          .map((t) => ({ x: [inp.currentAge + t.years], y: [t.target], type: 'scatter', mode: 'markers', showlegend: false, marker: { color: t.color, size: 11, symbol: 'circle-open', line: { width: 2.5 } }, hovertemplate: `${t.label}<extra></extra>` })),
-      ]
+  const mcYTop = mc ? Math.max(...mc.p90.slice(0, mcEnd + 1), ...mcTiers.filter((t) => Number.isFinite(t.years)).map((t) => t.target)) * 1.08 : 1
+  const mcTierMarkers = mcTiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ coord: [String(Math.round(inp.currentAge + t.years)), t.target], symbol: 'circle', symbolSize: 11, itemStyle: { color: 'transparent', borderColor: t.color, borderWidth: 2.5 }, label: { show: false } }))
+  const mcSeries = mc
+    ? [...mcBandSeries(mc.p10, mc.p90, 'rgba(96,165,250,0.12)', '10–90%'), ...mcBandSeries(mc.p25, mc.p75, 'rgba(96,165,250,0.22)', '25–75%'), { name: 'Median', type: 'line', symbol: 'none', emphasis: { disabled: true }, lineStyle: { color: '#93c5fd', width: 2 }, data: mc.p50.slice(0, mcEnd + 1) }, tierSeries(mcTiers), eventOverlay(mcYTop, false, mcTierMarkers)]
     : []
-  const mcLayout = {
-    ...baseAxes,
-    xaxis: { ...baseAxes.xaxis, range: mc ? [mcx[0], mcx[mcx.length - 1]] : undefined },
-    height: chartHeight,
-    margin: { l: 66, r: 24, t: 16, b: 64 },
-    hovermode: 'x unified',
-    legend: { orientation: 'h', y: -0.16, x: 0.5, xanchor: 'center', font: { size: 12 } },
-    shapes: [...mcTiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ type: 'line', xref: 'x', yref: 'y', x0: mcx[0], x1: mcx[mcx.length - 1], y0: t.target, y1: t.target, line: { color: t.color, width: 1.25, dash: 'dash' } })), ...eventShapes],
-    annotations: [...eventAnnotations],
-  }
+  const mcOption = { backgroundColor: 'transparent', textStyle: ECH_TEXT, grid: ECH_GRID, tooltip: ECH_TOOLTIP, xAxis: echXAxisCat(mcxCat), yAxis: echYAxis({ min: 0, max: mcYTop }), series: mcSeries } as unknown as EChartsOption
 
   const allocSum = Math.round((inp.stockPct + inp.bondPct + inp.cashPct) * 100)
   const ssActual = socialSecurityBenefit(inp.socialSecurity, inp.socialSecurityAge) // claim-age-adjusted (engine)
@@ -1058,7 +1056,7 @@ export default function App() {
             )}
 
             <div className="rounded-2xl border border-white/[0.07] bg-white/[0.015] p-4">
-              <Chart data={compare ? compareData : showMc ? mcData : singleData} layout={compare ? compareLayout : showMc ? mcLayout : singleLayout} />
+              <Chart option={compare ? compareOption : showMc ? mcOption : singleOption} height={chartHeight} />
             </div>
 
             {!compare && !showMc && flexStrategy && (
