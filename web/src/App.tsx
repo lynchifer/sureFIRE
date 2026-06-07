@@ -351,10 +351,12 @@ const axisTooltipFormatter = (ps: unknown): string => {
 }
 const ECH_TOOLTIP = {
   trigger: 'axis' as const,
+  confine: true, // keep the tooltip inside the chart bounds — avoids it spilling off small screens
   backgroundColor: '#111318',
   borderColor: 'rgba(255,255,255,0.08)',
   borderWidth: 1,
   textStyle: { color: '#e5e7eb', fontSize: 13 },
+  axisPointer: { type: 'line' as const, snap: true, lineStyle: { color: 'rgba(255,255,255,0.22)', width: 1, type: 'dashed' as const }, label: { show: true, formatter: (p: { value?: unknown }) => `Age ${p.value ?? ''}`, backgroundColor: '#1f2430', color: '#e5e7eb', fontSize: 11, padding: [3, 6] } },
   formatter: axisTooltipFormatter,
 }
 const ECH_TEXT = { color: '#9ca3af', fontFamily: 'inherit' }
@@ -384,6 +386,8 @@ const hexA = (hex: string, a: number): string => {
   const n = parseInt(hex.slice(1), 16)
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
 }
+// Vertical (top→bottom) linear gradient for polished area fills.
+const vGrad = (top: string, bottom: string) => ({ type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: top }, { offset: 1, color: bottom }] })
 
 export default function App() {
   const [plans, setPlans] = useState<PlanDTO[]>([])
@@ -600,7 +604,7 @@ export default function App() {
   const flexStrategy = hasRetirement && inp.withdrawalStrategy !== 'fixed'
 
   // --- shared ECharts series builders -------------------------------------------------------------
-  const netWorthSeries = { name: 'Net worth', type: 'line', symbol: 'none', emphasis: { disabled: true }, lineStyle: { color: C.netWorth, width: 2, type: 'dotted' }, data: proj.lifeNetWorth.slice(0, deathIdx + 1) }
+  const netWorthSeries = { name: 'Net worth', type: 'line', symbol: 'none', emphasis: { disabled: true }, smooth: 0.15, lineStyle: { color: C.netWorth, width: 2, type: 'dotted' }, data: proj.lifeNetWorth.slice(0, deathIdx + 1) }
   // Dashed horizontal tier lines, each labelled (🥗 leanFI …) at the left edge — drawn via markLine.
   const tierSeries = (tiers: typeof singleTiers) => ({
     type: 'line',
@@ -609,7 +613,7 @@ export default function App() {
     markLine: {
       silent: true,
       symbol: 'none',
-      data: tiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ yAxis: t.target, lineStyle: { color: t.color, type: 'dashed', width: 1.25 }, label: { show: true, formatter: `${t.icon} ${t.label}`, position: 'insideStartTop', color: t.color, fontSize: 10 } })),
+      data: tiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ yAxis: t.target, lineStyle: { color: t.color, type: 'dashed', width: 1.25 }, label: { show: true, formatter: `${t.icon} ${t.label}`, position: 'insideEndTop', color: t.color, fontSize: 10 } })),
     },
   })
 
@@ -675,9 +679,11 @@ export default function App() {
     return `Age ${age}<br/>` + rows.join('<br/>')
   }
   const singleMarkers: unknown[] = []
-  if (hasRetirement) singleMarkers.push({ coord: [String(proj.ages[retireIdx]), proj.lifeLiquid[retireIdx]], symbol: 'circle', symbolSize: 11, itemStyle: { color: C.fire, borderColor: '#0a0b0f', borderWidth: 2 }, label: { show: false } })
-  if (showSsMarker) singleMarkers.push({ coord: [String(proj.ages[claimIdx]), proj.lifeLiquid[claimIdx]], symbol: 'diamond', symbolSize: 12, itemStyle: { color: '#fbbf24', borderColor: '#0a0b0f', borderWidth: 2 }, label: { show: false } })
-  const singleSeries =[bandSeries('Initial', initData, C.initial), bandSeries('Saved', savedData, C.saved), bandSeries('Returns', returnsData, C.returns), ...equityBand, ...(hasRetirement ? [{ name: 'Retirement balance', type: 'line', symbol: 'none', emphasis: { disabled: true }, connectNulls: false, lineStyle: { color: C.drawdown, width: 2.5 }, data: drawData }] : []), ...(hasAssets ? [netWorthSeries] : []), tierSeries(singleTiers), eventOverlay(yTop, false, singleMarkers)]
+  if (hasRetirement) singleMarkers.push({ coord: [String(proj.ages[retireIdx]), proj.lifeLiquid[retireIdx]], symbol: 'circle', symbolSize: 11, itemStyle: { color: C.fire, borderColor: '#0a0b0f', borderWidth: 2 }, label: { show: true, position: 'top', distance: 8, formatter: `RE · ${proj.retireAge}`, color: '#fff', fontSize: 10, fontWeight: 'bold', backgroundColor: hexA(C.fire, 0.92), padding: [2, 5], borderRadius: 4 } })
+  if (showSsMarker) singleMarkers.push({ coord: [String(proj.ages[claimIdx]), proj.lifeLiquid[claimIdx]], symbol: 'diamond', symbolSize: 12, itemStyle: { color: '#fbbf24', borderColor: '#0a0b0f', borderWidth: 2 }, label: { show: true, position: 'bottom', distance: 8, formatter: `SS · ${claimAge}`, color: '#0a0b0f', fontSize: 10, fontWeight: 'bold', backgroundColor: '#fbbf24', padding: [2, 5], borderRadius: 4 } })
+  // Open-ring marker where the balance crosses each FI tier — sits on the balance line at that tier.
+  singleTiers.filter((t) => Number.isFinite(t.years)).forEach((t) => singleMarkers.push({ coord: [String(Math.round(inp.currentAge + t.years)), t.target], symbol: 'circle', symbolSize: 10, itemStyle: { color: 'transparent', borderColor: t.color, borderWidth: 2.5 }, label: { show: false } }))
+  const singleSeries =[bandSeries('Initial', initData, C.initial), bandSeries('Saved', savedData, C.saved), bandSeries('Returns', returnsData, C.returns), ...equityBand, ...(hasRetirement ? [{ name: 'Retirement balance', type: 'line', symbol: 'none', emphasis: { disabled: true }, connectNulls: false, smooth: 0.15, lineStyle: { color: C.drawdown, width: 2.5 }, areaStyle: { color: vGrad(hexA(C.drawdown, 0.32), hexA(C.drawdown, 0.02)) }, data: drawData }] : []), ...(hasAssets ? [netWorthSeries] : []), tierSeries(singleTiers), eventOverlay(yTop, false, singleMarkers)]
   const singleOption = { backgroundColor: 'transparent', textStyle: ECH_TEXT, grid: ECH_GRID, tooltip: hasHomeEquity ? { ...ECH_TOOLTIP, formatter: wealthTooltip } : ECH_TOOLTIP, xAxis: echXAxisCat(xCat), yAxis: echYAxis({ min: yBottom, max: yTop }), series: singleSeries } as unknown as EChartsOption
 
   // --- Compare ------------------------------------------------------------------------------------
@@ -707,7 +713,7 @@ export default function App() {
   const mcYTop = mc ? Math.max(...mc.p90.slice(0, mcEnd + 1), ...mcTiers.filter((t) => Number.isFinite(t.years)).map((t) => t.target)) * 1.08 : 1
   const mcTierMarkers = mcTiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ coord: [String(Math.round(inp.currentAge + t.years)), t.target], symbol: 'circle', symbolSize: 11, itemStyle: { color: 'transparent', borderColor: t.color, borderWidth: 2.5 }, label: { show: false } }))
   const mcSeries = mc
-    ? [...mcBandSeries(mc.p10, mc.p90, 'rgba(96,165,250,0.12)', '10–90%'), ...mcBandSeries(mc.p25, mc.p75, 'rgba(96,165,250,0.22)', '25–75%'), { name: 'Median', type: 'line', symbol: 'none', emphasis: { disabled: true }, lineStyle: { color: '#93c5fd', width: 2 }, data: mc.p50.slice(0, mcEnd + 1) }, tierSeries(mcTiers), eventOverlay(mcYTop, false, mcTierMarkers)]
+    ? [...mcBandSeries(mc.p10, mc.p90, 'rgba(96,165,250,0.12)', '10–90%'), ...mcBandSeries(mc.p25, mc.p75, 'rgba(96,165,250,0.22)', '25–75%'), { name: 'Median', type: 'line', symbol: 'none', emphasis: { disabled: true }, smooth: 0.15, lineStyle: { color: '#93c5fd', width: 2 }, data: mc.p50.slice(0, mcEnd + 1) }, tierSeries(mcTiers), eventOverlay(mcYTop, false, mcTierMarkers)]
     : []
   const mcOption = { backgroundColor: 'transparent', textStyle: ECH_TEXT, grid: ECH_GRID, tooltip: ECH_TOOLTIP, xAxis: echXAxisCat(mcxCat), yAxis: echYAxis({ min: 0, max: mcYTop }), series: mcSeries } as unknown as EChartsOption
 
