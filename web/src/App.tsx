@@ -910,6 +910,7 @@ export default function App() {
                   <b className="text-neutral-300">Plan survives</b> = share of 1,000 fat-tailed (Student-t) market simulations where the money lasts to age {inp.lifeExpectancy}. <b className="text-neutral-300">Fixed</b> mode uses one steady return instead.
                 </li>
                 <li>Everything is in today's (real) dollars. Plans save to your browser; <b className="text-neutral-300">Compare</b> overlays them.</li>
+                <li>I don't save your data — {brand}FIRE has no backend, and nothing you type ever leaves your browser. Don't believe me? <a href="https://github.com/lynchifer/sureFIRE" target="_blank" rel="noreferrer" className="text-neutral-300 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-200">read the source</a>.</li>
               </ul>
             </details>
             <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-b from-emerald-500/[0.05] to-white/[0.015] p-6">
