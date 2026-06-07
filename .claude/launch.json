@@ -5,12 +5,14 @@
       "name": "surefire-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
+      "cwd": "web",
       "port": 5173
     },
     {
       "name": "surefire-web-preview",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview"],
+      "cwd": "web",
       "port": 4173
     }
   ]
