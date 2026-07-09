@@ -180,8 +180,18 @@ export default function LifeEventsPanel({
           {rows.map(({ e, color, impact, enabled }) => (
             <div key={e.id}>
               <div
-                className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-white/[0.02] ${openId === e.id ? 'bg-white/[0.03]' : ''}`}
+                role="button"
+                tabIndex={0}
+                aria-expanded={openId === e.id}
+                className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60 ${openId === e.id ? 'bg-white/[0.03]' : ''}`}
                 onClick={() => setOpenId((o) => (o === e.id ? null : e.id))}
+                onKeyDown={(ev) => {
+                  // Only when the row itself is focused — not keystrokes bubbling from the rename input or buttons.
+                  if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) {
+                    ev.preventDefault()
+                    setOpenId((o) => (o === e.id ? null : e.id))
+                  }
+                }}
               >
                 <div className={`flex min-w-0 items-center gap-3 transition-opacity ${enabled ? '' : 'opacity-40'}`}>
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />

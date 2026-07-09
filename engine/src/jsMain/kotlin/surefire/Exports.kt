@@ -17,15 +17,6 @@ import kotlin.js.JsExport
  * (disabled ones are dropped), life-event compilation, tiers, drawdown, Monte Carlo, per-event impact.
  */
 
-// --- Scalars (handy for live UI readouts; the same math the projections use) ---
-
-@JsExport
-fun fireTarget(retirementSpending: Double, withdrawalRate: Double, taxRate: Double, correctTax: Boolean): Double =
-    Finance.fireTarget(retirementSpending, withdrawalRate, taxRate, correctTax)
-
-@JsExport
-fun savingsRate(income: Double, spending: Double): Double = Finance.savingsRate(income, spending)
-
 /** Claim-age-adjusted annual Social Security benefit, given the benefit at full retirement age. */
 @JsExport
 fun socialSecurityBenefitJs(pia: Double, claimAge: Int): Double = Finance.socialSecurityBenefit(pia, claimAge)
@@ -54,6 +45,7 @@ object EventDefaults {
     const val marriageSpouseSpending: Double = 15_000.0
     const val marriageSpouseNetWorth: Double = 50_000.0
     const val sabbaticalYears: Int = 1
+    const val sabbaticalReduction: Double = 1.0 // fraction of income removed (1.0 = full pause)
 }
 
 @JsExport
@@ -247,7 +239,6 @@ class ProjectionResult(
     val fireTarget: Double,
     val retirementEventCost: Double,
     val savingsRate: Double,
-    val growthRate: Double,
     val yearsToFire: Double,
     val ageAtFire: Int,
     val leanTarget: Double,
@@ -262,7 +253,6 @@ class ProjectionResult(
     val depletionAge: Int,
     val lifeLiquid: DoubleArray,
     val lifeNetWorth: DoubleArray,
-    val lifeSpending: DoubleArray,
     val ages: IntArray,
     val liquid: DoubleArray,
     val saved: DoubleArray,
@@ -271,16 +261,13 @@ class ProjectionResult(
     val cash: DoubleArray,
     val homeValue: DoubleArray,
     val mortgageBalance: DoubleArray,
-    val annualIncome: DoubleArray,
-    val annualSpending: DoubleArray,
-    val annualSavings: DoubleArray,
 )
 
 private fun ProjectionResult(p: Projection) = ProjectionResult(
-    p.fireTarget, p.retirementEventCost, p.savingsRate, p.growthRate, p.yearsToFire, p.ageAtFire,
+    p.fireTarget, p.retirementEventCost, p.savingsRate, p.yearsToFire, p.ageAtFire,
     p.leanTarget, p.leanYears, p.leanAge, p.fatTarget, p.fatYears, p.fatAge, p.netWorthAtFire,
-    p.retireAge, p.claimAge, p.depletionAge, p.lifeLiquid, p.lifeNetWorth, p.lifeSpending,
-    p.ages, p.liquid, p.saved, p.returns, p.netWorth, p.cash, p.homeValue, p.mortgageBalance, p.annualIncome, p.annualSpending, p.annualSavings,
+    p.retireAge, p.claimAge, p.depletionAge, p.lifeLiquid, p.lifeNetWorth,
+    p.ages, p.liquid, p.saved, p.returns, p.netWorth, p.cash, p.homeValue, p.mortgageBalance,
 )
 
 @JsExport

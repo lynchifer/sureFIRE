@@ -59,7 +59,6 @@ export interface ProjView {
   fireTarget: number
   retirementEventCost: number
   savingsRate: number
-  growthRate: number
   yearsToFire: number
   ageAtFire: number
   leanTarget: number
@@ -74,7 +73,6 @@ export interface ProjView {
   depletionAge: number
   lifeLiquid: number[]
   lifeNetWorth: number[]
-  lifeSpending: number[]
   ages: number[]
   liquid: number[]
   saved: number[]
@@ -83,9 +81,6 @@ export interface ProjView {
   cash: number[]
   homeValue: number[]
   mortgageBalance: number[]
-  annualIncome: number[]
-  annualSpending: number[]
-  annualSavings: number[]
 }
 
 export interface MCView {
@@ -206,12 +201,11 @@ function toInputs(i: FireInputs): FireInputsJs {
 export function runFixed(i: FireInputs): ProjView {
   const r = projectFixedJs(toInputs(i))
   return {
-    fireTarget: r.fireTarget, retirementEventCost: r.retirementEventCost, savingsRate: r.savingsRate, growthRate: r.growthRate, yearsToFire: r.yearsToFire, ageAtFire: r.ageAtFire,
+    fireTarget: r.fireTarget, retirementEventCost: r.retirementEventCost, savingsRate: r.savingsRate, yearsToFire: r.yearsToFire, ageAtFire: r.ageAtFire,
     leanTarget: r.leanTarget, leanYears: r.leanYears, leanAge: r.leanAge, fatTarget: r.fatTarget, fatYears: r.fatYears, fatAge: r.fatAge,
-    netWorthAtFire: r.netWorthAtFire, retireAge: r.retireAge, claimAge: r.claimAge, depletionAge: r.depletionAge, lifeLiquid: arr(r.lifeLiquid), lifeNetWorth: arr(r.lifeNetWorth), lifeSpending: arr(r.lifeSpending),
+    netWorthAtFire: r.netWorthAtFire, retireAge: r.retireAge, claimAge: r.claimAge, depletionAge: r.depletionAge, lifeLiquid: arr(r.lifeLiquid), lifeNetWorth: arr(r.lifeNetWorth),
     ages: arr(r.ages), liquid: arr(r.liquid), saved: arr(r.saved), returns: arr(r.returns), netWorth: arr(r.netWorth),
     cash: arr(r.cash), homeValue: arr(r.homeValue), mortgageBalance: arr(r.mortgageBalance),
-    annualIncome: arr(r.annualIncome), annualSpending: arr(r.annualSpending), annualSavings: arr(r.annualSavings),
   }
 }
 

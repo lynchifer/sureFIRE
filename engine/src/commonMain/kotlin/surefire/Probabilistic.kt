@@ -243,13 +243,3 @@ fun recommendedRetireAge(inp: FixedInputs, threshold: Double = MonteCarloModel.R
     }
     return lo
 }
-
-class SensitivityPoint(val delta: Double, val yearsToFire: Double)
-
-/** Years-to-FIRE as current spending scales by (1+delta) for each delta. */
-fun spendingSensitivity(inp: FixedInputs, deltas: DoubleArray): Array<SensitivityPoint> =
-    Array(deltas.size) { i -> SensitivityPoint(deltas[i], projectFixed(inp.copy(spending = inp.spending * (1.0 + deltas[i]))).yearsToFire) }
-
-/** Years-to-FIRE as the stock return scales by (1+delta) for each delta. */
-fun stockReturnSensitivity(inp: FixedInputs, deltas: DoubleArray): Array<SensitivityPoint> =
-    Array(deltas.size) { i -> SensitivityPoint(deltas[i], projectFixed(inp.copy(stockReturn = inp.stockReturn * (1.0 + deltas[i]))).yearsToFire) }

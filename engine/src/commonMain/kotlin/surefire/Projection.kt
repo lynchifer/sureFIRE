@@ -122,7 +122,13 @@ internal fun retirementEventCost(inp: FixedInputs, retireAge: Int): Double {
  * CALIBRATED accumulation (reproduces the engaging-data reference): beginning-of-year contribution,
  * THEN growth: liquid' = (liquid + flows) * (1 + g[t]). FIRE crosses LIQUID investments.
  */
-internal fun simulate(inp: FixedInputs, gByYear: DoubleArray): Projection {
+internal fun simulate(rawInp: FixedInputs, gByYear: DoubleArray): Projection {
+    // Garbage-in guard: a sellAge at/before the buyAge is meaningless — without this it would either pay
+    // out phantom sale proceeds for a never-bought home or black-hole the down payment (bought but never
+    // "held"). Treat such a home as never sold; every property consumer below sees the sanitized inputs.
+    val inp = if (rawInp.properties.any { it.sellAge != null && it.sellAge <= it.buyAge })
+        rawInp.copy(properties = rawInp.properties.map { p -> if (p.sellAge != null && p.sellAge <= p.buyAge) p.copy(sellAge = null) else p })
+    else rawInp
     val effectiveRetireAge = Finance.effectiveRetireAge(inp.currentAge, inp.retireAge, inp.socialSecurityAge) // income stops, drawdown begins
     val ssClaimAge = Finance.claimAge(inp.socialSecurityAge) // Social Security begins here — may be AFTER retirement (a bridge)
     val ssBenefit = Finance.socialSecurityBenefit(inp.socialSecurity, inp.socialSecurityAge) // claim-age-adjusted

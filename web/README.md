@@ -1,73 +1,41 @@
-# React + TypeScript + Vite
+# sureFIRE web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite + Tailwind v4 + Apache ECharts front end for [sureFIRE](../README.md).
 
-Currently, two official plugins are available:
+All financial math lives in the Kotlin engine (`../engine`); this app imports its built JS package
+(`surefire-engine` → `file:../engine/build/dist/js/productionLibrary`). [`src/engine.ts`](src/engine.ts)
+is the only boundary — it marshals the UI's input shape into the engine and copies results out, with
+**no calculations** on the TypeScript side.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Setup
 
-## React Compiler
+```bash
+# 1. Build the engine JS package this app depends on (once, and after any Kotlin change)
+cd ../engine && ./gradlew --no-daemon jsNodeProductionLibraryDistribution
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# 2. Install and run
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+After rebuilding the engine, restart the dev server; if Vite still serves the stale package, clear
+its dependency cache: `rm -rf node_modules/.vite`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Commands
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| Command | What it does |
+|---|---|
+| `npm run dev` | Vite dev server (HMR) on :5173 |
+| `npm run build` | `tsc -b` type-check + production build to `dist/` |
+| `npm run lint` | ESLint over the project |
+| `npm run preview` | Serve the built `dist/` on :4173 |
+
+## Structure
+
+- `src/App.tsx` — app shell: plan tabs, inputs, results card, ECharts chart options (Fixed / Monte Carlo / Compare)
+- `src/Chart.tsx` — thin ECharts wrapper (init/resize/dispose)
+- `src/LifeEventsPanel.tsx` + `src/lifeEvents.ts` — life-event editing UI and (de)serialization
+- `src/api.ts` — plan persistence (localStorage only; there is no server)
+- `src/plans.ts`, `src/format.ts`, `src/useClearableNumber.ts` — helpers
+
+Plans save to the browser. Deployed to GitHub Pages by [`web.yml`](../.github/workflows/web.yml).

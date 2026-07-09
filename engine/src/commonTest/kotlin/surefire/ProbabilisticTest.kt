@@ -50,22 +50,6 @@ class ProbabilisticTest {
         assertTrue(mc.lifeSuccessRate < 0.2, "retiring immediately on a tiny pot should mostly fail")
     }
 
-    // --- Sensitivity ---
-
-    @Test
-    fun spendingSensitivityIsMonotonic() {
-        val s = spendingSensitivity(reference(), doubleArrayOf(-0.2, 0.0, 0.2))
-        assertTrue(s[0].yearsToFire < s[1].yearsToFire) // spend less -> retire sooner
-        assertTrue(s[2].yearsToFire > s[1].yearsToFire) // spend more -> retire later
-    }
-
-    @Test
-    fun stockReturnSensitivityIsMonotonic() {
-        val s = stockReturnSensitivity(reference(), doubleArrayOf(-0.6, 0.0, 0.6))
-        assertTrue(s[0].yearsToFire > s[1].yearsToFire) // lower returns -> retire later
-        assertTrue(s[2].yearsToFire < s[1].yearsToFire) // higher returns -> retire sooner
-    }
-
     @Test
     fun percentileBasics() {
         val a = doubleArrayOf(0.0, 10.0, 20.0, 30.0, 40.0)

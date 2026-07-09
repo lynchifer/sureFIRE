@@ -50,7 +50,7 @@ export function newEvent(kind: EventKind, currentAge: number): LifeEvent {
     case 'marriage':
       return { id, enabled: true, kind, age: currentAge + 1, ceremonyCost: D.marriageCeremonyCost, spouseIncome: D.marriageSpouseIncome, spouseSpending: D.marriageSpouseSpending, spouseNetWorth: D.marriageSpouseNetWorth }
     case 'sabbatical':
-      return { id, enabled: true, kind, spouse: false, startAge: currentAge + 5, years: D.sabbaticalYears, reduction: 1 }
+      return { id, enabled: true, kind, spouse: false, startAge: currentAge + 5, years: D.sabbaticalYears, reduction: D.sabbaticalReduction }
   }
 }
 

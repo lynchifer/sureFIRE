@@ -28,6 +28,19 @@ class NetWorthTest {
     }
 
     @Test
+    fun sellBeforeBuyIsTreatedAsNeverSold() {
+        // Nonsense input (sell at 38, buy at 45) must not pay phantom proceeds or eat the down payment:
+        // the engine treats it exactly like the same home never sold.
+        val nonsense = projectFixed(reference().copy(properties = listOf(home(buyAge = 45, sellAge = 38))))
+        val neverSold = projectFixed(reference().copy(properties = listOf(home(buyAge = 45))))
+        assertEquals(neverSold.yearsToFire, nonsense.yearsToFire, 1e-9)
+        for (k in neverSold.ages.indices) {
+            assertEquals(neverSold.netWorth[k], nonsense.netWorth[k], 1e-9)
+            assertEquals(neverSold.liquid[k], nonsense.liquid[k], 1e-9)
+        }
+    }
+
+    @Test
     fun alreadyOwnedHomeOpensOnTheRemainingMortgage() {
         // reference currentAge = 32; a home bought at 22 is 10 years into its 30-yr loan.
         val p = projectFixed(reference().copy(properties = listOf(home(buyAge = 22))))

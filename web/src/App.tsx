@@ -32,7 +32,6 @@ const C = {
   netWorth: '#c4b5fd',
   fire: '#fb7185',
   drawdown: '#f472b6',
-  drawdownFill: 'rgba(244, 114, 182, 0.13)',
 }
 
 /** Tracks whether the viewport is phone-sized (matches Tailwind's `sm` breakpoint), updating on
@@ -224,7 +223,7 @@ function OptionalField({
           inputMode={money ? 'decimal' : undefined}
           value={text}
           placeholder={money ? groupThousands(String(placeholder)) : String(placeholder)}
-          onChange={money ? moneyOnChange(onText) : (e) => onText(e.target.value)}
+          onChange={(e) => (money ? moneyOnChange(onText)(e) : onText(e.target.value))}
           onWheel={(e) => e.currentTarget.blur()}
           className={inputText}
           aria-invalid={error ? true : undefined}
@@ -373,8 +372,8 @@ const echXAxisCat = (cats: string[]) => ({
   axisLabel: { color: '#9ca3af', fontSize: 11 },
   splitLine: { show: false },
 })
-const echYAxis = (o: { log?: boolean; min?: number; max?: number }) => ({
-  type: (o.log ? 'log' : 'value') as 'log' | 'value',
+const echYAxis = (o: { min?: number; max?: number }) => ({
+  type: 'value' as const,
   min: o.min,
   max: o.max,
   axisLine: { show: false },
@@ -406,9 +405,6 @@ export default function App() {
   const isMobile = useIsMobile()
   const chartHeight = isMobile ? 440 : 540
   const brand = 'sure'
-  useEffect(() => {
-    document.title = `${brand}FIRE — when can I retire?`
-  }, [brand])
 
   // Load profiles from browser storage (localStorage); seed a Base Plan if none exist yet.
   useEffect(() => {
@@ -443,12 +439,10 @@ export default function App() {
   useEffect(() => {
     if (!loaded || !active) return
     const snapshot = active
-    setSaveState('saving')
+    // setState only inside the async callback (not the effect body) — keeps react-hooks/set-state-in-effect happy.
     const t = setTimeout(() => {
-      if (deletedIds.current.has(snapshot.id)) {
-        setSaveState('saved')
-        return
-      }
+      if (deletedIds.current.has(snapshot.id)) return
+      setSaveState('saving')
       void savePlan(snapshot).then(() => setSaveState('saved'))
     }, 400)
     return () => clearTimeout(t)
@@ -549,7 +543,8 @@ export default function App() {
   // "Retire at" auto-tracks the recommended age until the user overrides it (sets a concrete retireAge).
   const effInp = useMemo(() => (inp.retireAge == null ? { ...inp, retireAge: recRetire } : inp), [inp, recRetire])
   const proj = useMemo(() => runFixed(effInp), [effInp])
-  const allProj = useMemo(() => plans.map((p) => ({ plan: p, proj: runFixed(p.inputs) })), [plans])
+  // Compare-only: don't re-project every saved plan on each keystroke while the overlay is hidden.
+  const allProj = useMemo(() => (compare ? plans.map((p) => ({ plan: p, proj: runFixed(p.inputs) })) : []), [plans, compare])
   const mc = useMemo(() => (mode === 'mc' && !compare ? runMonteCarlo(effInp) : null), [effInp, mode, compare])
   // Probability the plan lasts if you retire AT the effective RE age (reuse the MC-mode result when shown,
   // else run the life-path MC). runLifeSuccess returns 1 when there's no drawdown (retire at/after death).
@@ -632,10 +627,10 @@ export default function App() {
   })
   // A silent overlay series carrying: faint full-height duration bands (markArea), dotted stems
   // (markLine) and icon chips + point markers (markPoint). `yTopVal` positions the icon lane near the top.
-  const eventOverlay = (yTopVal: number, log: boolean, extraPoints: unknown[]) => {
-    const iconY = (lane: number) => (log ? yTopVal / Math.pow(2.4, lane) : yTopVal * (0.97 - lane * 0.07))
+  const eventOverlay = (yTopVal: number, extraPoints: unknown[]) => {
+    const iconY = (lane: number) => yTopVal * (0.97 - lane * 0.07)
     const area = placedEvents.filter((v) => v.span[1] > v.span[0]).map((v) => [{ xAxis: String(Math.round(v.span[0])), itemStyle: { color: hexA(v.color, 0.06) } }, { xAxis: String(Math.round(Math.min(Number.isFinite(v.span[1]) ? v.span[1] : chartEnd, chartEnd))) }])
-    const stems = log ? [] : placedEvents.map((v) => [{ coord: [String(v.start), 0], lineStyle: { color: hexA(v.color, 0.4), type: 'dotted', width: 1 } }, { coord: [String(v.start), iconY(v.lane)] }])
+    const stems = placedEvents.map((v) => [{ coord: [String(v.start), 0], lineStyle: { color: hexA(v.color, 0.4), type: 'dotted', width: 1 } }, { coord: [String(v.start), iconY(v.lane)] }])
     const icons = placedEvents.map((v) => ({ coord: [String(v.start), iconY(v.lane)], symbolSize: 0, label: { show: true, formatter: v.icon, fontSize: 13, backgroundColor: 'rgba(12,14,19,0.85)', borderColor: hexA(v.color, 0.55), borderWidth: 1, padding: 3, borderRadius: 4 } }))
     return {
       type: 'line',
@@ -687,7 +682,7 @@ export default function App() {
   if (hasRetirement) reSsMarkers.push({ coord: [String(proj.ages[retireIdx]), proj.lifeLiquid[retireIdx]], symbol: 'circle', symbolSize: 11, itemStyle: { color: C.fire, borderColor: '#0a0b0f', borderWidth: 2 }, label: { show: false }, emphasis: { label: { show: true, position: 'top', distance: 8, formatter: `RE · ${proj.retireAge}`, color: '#fff', fontSize: 10, fontWeight: 'bold', backgroundColor: hexA(C.fire, 0.92), padding: [2, 5], borderRadius: 4 } } })
   if (showSsMarker) reSsMarkers.push({ coord: [String(proj.ages[claimIdx]), proj.lifeLiquid[claimIdx]], symbol: 'diamond', symbolSize: 12, itemStyle: { color: '#fbbf24', borderColor: '#0a0b0f', borderWidth: 2 }, label: { show: false }, emphasis: { label: { show: true, position: 'bottom', distance: 8, formatter: `SS · ${claimAge}`, color: '#0a0b0f', fontSize: 10, fontWeight: 'bold', backgroundColor: '#fbbf24', padding: [2, 5], borderRadius: 4 } } })
   const reSsSeries = reSsMarkers.length ? [{ type: 'line', data: [], markPoint: { data: reSsMarkers } }] : []
-  const singleSeries =[bandSeries('Initial', initData, C.initial), bandSeries('Saved', savedData, C.saved), bandSeries('Returns', returnsData, C.returns), ...equityBand, ...(hasRetirement ? [{ name: 'Retirement balance', type: 'line', symbol: 'none', emphasis: { disabled: true }, connectNulls: false, smooth: 0.15, lineStyle: { color: C.drawdown, width: 2.5 }, areaStyle: { color: vGrad(hexA(C.drawdown, 0.32), hexA(C.drawdown, 0.02)) }, data: drawData }] : []), ...(hasAssets ? [netWorthSeries] : []), tierSeries(singleTiers), ...reSsSeries, eventOverlay(yTop, false, tierRingMarkers)]
+  const singleSeries =[bandSeries('Initial', initData, C.initial), bandSeries('Saved', savedData, C.saved), bandSeries('Returns', returnsData, C.returns), ...equityBand, ...(hasRetirement ? [{ name: 'Retirement balance', type: 'line', symbol: 'none', emphasis: { disabled: true }, connectNulls: false, smooth: 0.15, lineStyle: { color: C.drawdown, width: 2.5 }, areaStyle: { color: vGrad(hexA(C.drawdown, 0.32), hexA(C.drawdown, 0.02)) }, data: drawData }] : []), ...(hasAssets ? [netWorthSeries] : []), tierSeries(singleTiers), ...reSsSeries, eventOverlay(yTop, tierRingMarkers)]
   const singleOption = { backgroundColor: 'transparent', textStyle: ECH_TEXT, grid: ECH_GRID, tooltip: hasHomeEquity ? { ...ECH_TOOLTIP, formatter: wealthTooltip } : ECH_TOOLTIP, xAxis: echXAxisCat(xCat), yAxis: echYAxis({ min: yBottom, max: yTop }), series: singleSeries } as unknown as EChartsOption
 
   // --- Compare ------------------------------------------------------------------------------------
@@ -717,7 +712,7 @@ export default function App() {
   const mcYTop = mc ? Math.max(...mc.p90.slice(0, mcEnd + 1), ...mcTiers.filter((t) => Number.isFinite(t.years)).map((t) => t.target)) * 1.08 : 1
   const mcTierMarkers = mcTiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ coord: [String(Math.round(inp.currentAge + t.years)), t.target], symbol: 'circle', symbolSize: 11, itemStyle: { color: 'transparent', borderColor: t.color, borderWidth: 2.5 }, label: { show: false } }))
   const mcSeries = mc
-    ? [...mcBandSeries(mc.p10, mc.p90, 'rgba(96,165,250,0.12)', '10–90%'), ...mcBandSeries(mc.p25, mc.p75, 'rgba(96,165,250,0.22)', '25–75%'), { name: 'Median', type: 'line', symbol: 'none', emphasis: { disabled: true }, smooth: 0.15, lineStyle: { color: '#93c5fd', width: 2 }, data: mc.p50.slice(0, mcEnd + 1) }, tierSeries(mcTiers), eventOverlay(mcYTop, false, mcTierMarkers)]
+    ? [...mcBandSeries(mc.p10, mc.p90, 'rgba(96,165,250,0.12)', '10–90%'), ...mcBandSeries(mc.p25, mc.p75, 'rgba(96,165,250,0.22)', '25–75%'), { name: 'Median', type: 'line', symbol: 'none', emphasis: { disabled: true }, smooth: 0.15, lineStyle: { color: '#93c5fd', width: 2 }, data: mc.p50.slice(0, mcEnd + 1) }, tierSeries(mcTiers), eventOverlay(mcYTop, mcTierMarkers)]
     : []
   const mcOption = { backgroundColor: 'transparent', textStyle: ECH_TEXT, grid: ECH_GRID, tooltip: ECH_TOOLTIP, xAxis: echXAxisCat(mcxCat), yAxis: echYAxis({ min: 0, max: mcYTop }), series: mcSeries } as unknown as EChartsOption
 
@@ -848,7 +843,7 @@ export default function App() {
             <div className="space-y-3">
             <Section title="You" accent="#34d399">
               <Field label="Current age" value={inp.currentAge} defaultValue={DEFAULTS.currentAge} onChange={(v) => set('currentAge', Math.round(v))} error={verr.currentAge} />
-              <Field label="Expected death" suffix="yrs" step={1} help="Age your retirement balance is drawn down to. ~95 is conservative." value={inp.lifeExpectancy} defaultValue={DEFAULTS.lifeExpectancy} onChange={(v) => set('lifeExpectancy', v)} error={verr.lifeExpectancy} />
+              <Field label="Expected death" step={1} help="Age your retirement balance is drawn down to. ~95 is conservative." value={inp.lifeExpectancy} defaultValue={DEFAULTS.lifeExpectancy} onChange={(v) => set('lifeExpectancy', v)} error={verr.lifeExpectancy} />
               <Field label="Investments" prefix="$" step={1000} value={inp.initialInvestments} defaultValue={DEFAULTS.initialInvestments} onChange={(v) => set('initialInvestments', v)} error={verr.initialInvestments} />
               <div className="col-span-2 space-y-1">
                 <OptionalField label="Retire at" help="Auto-set to the recommended age — the earliest with ~80% market survival. Type to override (e.g. an earlier, riskier age); clear it to track the recommendation again." value={inp.retireAge} placeholder={recRetire} onChange={(v) => set('retireAge', v)} error={verr.retireAge} />
@@ -1061,7 +1056,7 @@ export default function App() {
                           <td className="px-4 py-2.5 text-right tabular-nums">{fin ? pr.yearsToFire.toFixed(1) : '—'}</td>
                           <td className="px-4 py-2.5 text-right tabular-nums">{fin ? pr.ageAtFire : '—'}</td>
                           <td className="px-4 py-2.5 text-right tabular-nums">{usdShort(pr.fireTarget)}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums">{usdShort(nw)}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{fin ? usdShort(nw) : '—'}</td>
                         </tr>
                       )
                     })}
