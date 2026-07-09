@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import { newEvent, eventIcon, eventTitle, eventDefaultTitle, eventAge, eventSpan, isEnabled } from './lifeEvents'
 import type { LifeEvent, EventKind } from './lifeEvents'
 import { useClearableNumber } from './useClearableNumber'
+import { usdShort } from './format'
 
 function Num({
   label,
@@ -113,18 +114,42 @@ function spanText(e: LifeEvent): string {
   return `age ${a} → ${b}`
 }
 
+/** The single highest-leverage dial for each event kind, exposed as a slider on the COLLAPSED row so
+ *  you can drag it and watch the event's "±yr to FI" badge move — no need to open the full editor. */
+function quickKnob(e: LifeEvent): { label: string; value: number; min: number; max: number; step: number; money: boolean; apply: (v: number) => Record<string, unknown> } | null {
+  // Sliders need a bounded range; if the current value already exceeds the kind's cap, widen the max to
+  // the next multiple of the cap so the thumb stays draggable instead of pinning to the right edge.
+  const cap = (base: number, v: number) => Math.max(base, Math.ceil(v / base) * base)
+  switch (e.kind) {
+    case 'home':
+      return { label: 'Price', value: e.price, min: 50_000, max: cap(1_500_000, e.price), step: 10_000, money: true, apply: (v) => ({ price: v }) }
+    case 'child':
+      return { label: 'Cost/yr', value: e.annualCost, min: 0, max: cap(60_000, e.annualCost), step: 1_000, money: true, apply: (v) => ({ annualCost: v }) }
+    case 'marriage':
+      return { label: 'Spouse inc.', value: e.spouseIncome, min: 0, max: cap(300_000, e.spouseIncome), step: 5_000, money: true, apply: (v) => ({ spouseIncome: v }) }
+    case 'sabbatical':
+      return { label: 'Years', value: e.years, min: 1, max: Math.max(10, e.years), step: 1, money: false, apply: (v) => ({ years: v }) }
+    case 'oneTime':
+      return { label: 'Amount', value: e.amount, min: 0, max: cap(250_000, e.amount), step: 5_000, money: true, apply: (v) => ({ amount: v }) }
+    case 'custom':
+      return { label: 'Amt/yr', value: e.amount, min: 0, max: cap(100_000, e.amount), step: 1_000, money: true, apply: (v) => ({ amount: v }) }
+  }
+}
+
 export default function LifeEventsPanel({
   events,
   currentAge,
   onChange,
   colors,
   impacts,
+  netImpact,
 }: {
   events: LifeEvent[]
   currentAge: number
   onChange: (events: LifeEvent[]) => void
   colors: string[]
   impacts: number[]
+  netImpact: number
 }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null) // event whose name is being inline-edited
@@ -159,7 +184,16 @@ export default function LifeEventsPanel({
   return (
     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.015] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-300"><span className="h-2 w-2 rounded-full bg-pink-400" />Life events</h3>
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-300">
+          <span className="h-2 w-2 rounded-full bg-pink-400" />
+          Life events
+          {events.some(isEnabled) && (
+            <span className="flex items-center gap-1.5 normal-case tracking-normal">
+              <span className="font-normal text-neutral-600">· together</span>
+              <ImpactBadge impact={netImpact} />
+            </span>
+          )}
+        </h3>
         <div className="flex flex-wrap gap-1.5">
           {ADD.map((a) => (
             <button
@@ -254,6 +288,30 @@ export default function LifeEventsPanel({
                   ×
                 </button>
               </div>
+
+              {/* Quick-adjust: the event's highest-leverage dial, right on the collapsed row — drag it
+                  and watch the ±yr-to-FI badge above respond. The full editor still has every field. */}
+              {enabled && openId !== e.id && (() => {
+                const k = quickKnob(e)
+                if (!k) return null
+                return (
+                  <div className="flex items-center gap-2.5 px-3 pb-2.5 pl-10">
+                    <span className="w-16 shrink-0 text-[10px] uppercase tracking-wide text-neutral-500">{k.label}</span>
+                    <input
+                      type="range"
+                      min={k.min}
+                      max={k.max}
+                      step={k.step}
+                      value={k.value}
+                      onChange={(ev) => patch(e.id, k.apply(Number(ev.target.value)))}
+                      aria-label={`${eventTitle(e)} — quick adjust ${k.label}`}
+                      className="h-1 w-full min-w-0 cursor-pointer"
+                      style={{ accentColor: color }}
+                    />
+                    <span className="w-14 shrink-0 text-right text-xs tabular-nums text-neutral-300">{k.money ? usdShort(k.value) : `${k.value} yr`}</span>
+                  </div>
+                )
+              })()}
 
               {openId === e.id && (
                 <div className="border-t border-white/[0.05] bg-black/20 px-3 py-3">

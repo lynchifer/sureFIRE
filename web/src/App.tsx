@@ -552,6 +552,18 @@ export default function App() {
   const eventColors = inp.lifeEvents.map((_, i) => EVENT_COLORS[i % EVENT_COLORS.length])
   // Per-event marginal FIRE-date impact — computed entirely in the engine (eventImpactsJs).
   const eventImpacts = useMemo(() => runImpacts(inp), [inp])
+  // Joint effect of ALL enabled events on the FI date (vs. a no-events projection) — the holistic
+  // readout for the panel header; the per-event badges above are marginal, this is the sum story.
+  const netEventImpact = useMemo(() => {
+    if (!inp.lifeEvents.some(isEnabled)) return NaN
+    const bare = runFixed({ ...effInp, lifeEvents: [] })
+    const w = proj.yearsToFire
+    const wo = bare.yearsToFire
+    if (Number.isFinite(w) && Number.isFinite(wo)) return w - wo
+    if (!Number.isFinite(w) && Number.isFinite(wo)) return Infinity // events push FI past the horizon
+    if (Number.isFinite(w) && !Number.isFinite(wo)) return -Infinity // events are what make FI reachable
+    return NaN
+  }, [effInp, proj, inp.lifeEvents])
 
   // Three FI tiers (lean/FI/fat) — all crossings computed in the Kotlin engine; here we just read them.
   // Red → amber → green across the three tiers: leanFI (bare-minimum, risky) → FI → fatFI (comfortable).
@@ -1078,7 +1090,7 @@ export default function App() {
             )}
 
             {!compare && (
-              <LifeEventsPanel events={inp.lifeEvents} currentAge={inp.currentAge} onChange={(evs) => set('lifeEvents', evs)} colors={eventColors} impacts={eventImpacts} />
+              <LifeEventsPanel events={inp.lifeEvents} currentAge={inp.currentAge} onChange={(evs) => set('lifeEvents', evs)} colors={eventColors} impacts={eventImpacts} netImpact={netEventImpact} />
             )}
 
             {compare && (
