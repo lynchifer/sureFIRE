@@ -6,6 +6,12 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Paint the app background on the root element itself — the app div only covers the viewport, so
+   overscroll/rubber-banding past the page edges otherwise flashes the browser's default white. */
+html {
+  background-color: #0a0b0f;
+}
+
 /* Safety net: never let a stray off-screen element (e.g. an absolutely-positioned popover near the
    right edge) give the whole page a horizontal scrollbar on mobile. */
 body {

@@ -121,8 +121,12 @@ function quickKnob(e: LifeEvent): { label: string; value: number; min: number; m
   // the next multiple of the cap so the thumb stays draggable instead of pinning to the right edge.
   const cap = (base: number, v: number) => Math.max(base, Math.ceil(v / base) * base)
   switch (e.kind) {
-    case 'home':
-      return { label: 'Price', value: e.price, min: 50_000, max: cap(1_500_000, e.price), step: 10_000, money: true, apply: (v) => ({ price: v }) }
+    case 'home': {
+      // The cash-now lever: the down payment in DOLLARS ("price" read as too vague). Price stays fixed;
+      // the slider drives downPct — more down = less mortgage but more capital pulled from investments.
+      if (e.price <= 0) return null
+      return { label: 'Down pmt', value: Math.round(e.price * e.downPct), min: 0, max: e.price, step: 5_000, money: true, apply: (v) => ({ downPct: Math.min(1, Math.max(0, v / e.price)) }) }
+    }
     case 'child':
       return { label: 'Cost/yr', value: e.annualCost, min: 0, max: cap(60_000, e.annualCost), step: 1_000, money: true, apply: (v) => ({ annualCost: v }) }
     case 'marriage':
