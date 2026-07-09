@@ -212,7 +212,8 @@ export default function LifeEventsPanel({
       ) : (
         <div className="mt-3 divide-y divide-white/[0.05] overflow-hidden rounded-xl border border-white/[0.07]">
           {rows.map(({ e, color, impact, enabled }) => (
-            <div key={e.id}>
+            // An open item gets a left inset in its timeline color, tying the editor to its chart band.
+            <div key={e.id} style={openId === e.id ? { boxShadow: `inset 2px 0 0 ${color}` } : undefined}>
               <div
                 role="button"
                 tabIndex={0}
@@ -275,18 +276,26 @@ export default function LifeEventsPanel({
                 >
                   <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-3' : 'translate-x-0'}`} />
                 </button>
-                <span className="text-neutral-600">{openId === e.id ? '▾' : '▸'}</span>
                 <button
                   onClick={(ev) => {
                     ev.stopPropagation()
                     remove(e.id)
                   }}
                   aria-label={`Remove ${eventTitle(e)}`}
-                  className="rounded text-neutral-600 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60"
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-sm leading-none text-neutral-500 transition-colors hover:border-rose-500/40 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60"
                   title="Remove"
                 >
                   ×
                 </button>
+                {/* Disclosure chevron — a visible chip at the row's edge (the whole row is the toggle). */}
+                <span
+                  aria-hidden
+                  className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border transition-colors ${openId === e.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-neutral-300'}`}
+                >
+                  <svg viewBox="0 0 16 16" className={`h-3.5 w-3.5 transition-transform duration-150 ${openId === e.id ? 'rotate-90' : ''}`}>
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.75" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
               </div>
 
               {/* Quick-adjust: the event's highest-leverage dial, right on the collapsed row — drag it
