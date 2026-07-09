@@ -979,7 +979,16 @@ export default function App() {
                 </div>
                 <div className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium tabular-nums text-neutral-400">{pct(proj.savingsRate, 0)} saved</div>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2.5">
+              <div className="mt-4 flex items-baseline justify-between gap-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Path to FI</div>
+                <p className="truncate text-[11px] leading-relaxed text-neutral-500">
+                  <span className="text-neutral-400">{usdShort(inp.retirementSpending ?? totalSpending(inp))}/yr</span> ÷ <span className="text-neutral-400">{(inp.withdrawalRate * 100).toFixed(1)}%</span> withdrawal, tax-grossed
+                  {Math.round(proj.retirementEventCost) !== 0 && (
+                    <> · {proj.retirementEventCost > 0 ? '+' : '−'}{usdShort(Math.abs(proj.retirementEventCost))}/yr events</>
+                  )}
+                </p>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2.5">
                 {heroTiers.map((t) => {
                   const fin = Number.isFinite(t.years)
                   return (
@@ -1003,22 +1012,12 @@ export default function App() {
                   )
                 })}
               </div>
-              <p className="mt-3 text-xs leading-relaxed text-neutral-400">
-                Scales your <span className="text-neutral-200">{usdShort(inp.retirementSpending ?? totalSpending(inp))}</span>{' '}
-                {inp.retirementSpending != null ? 'retirement' : 'annual'} spend (<span className="text-red-300/90">{Math.round(inp.leanFactor * 100)}%</span> · <span className="text-amber-300/90">100%</span> · <span className="text-emerald-300/90">{Math.round(inp.fatFactor * 100)}%</span>) ÷ your{' '}
-                <span className="text-neutral-200">{(inp.withdrawalRate * 100).toFixed(1)}%</span> withdrawal rate, grossed up for tax
-                {Math.round(proj.retirementEventCost) !== 0 && (
-                  <>
-                    , {proj.retirementEventCost > 0 ? 'plus' : 'less'}{' '}
-                    <span className="text-neutral-300">{usdShort(Math.abs(proj.retirementEventCost))}/yr</span> of life-event {proj.retirementEventCost > 0 ? 'costs' : 'income'}
-                  </>
-                )}
-                .
-              </p>
-              <div className="mt-3 grid grid-cols-1 divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.02] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-                <div className="px-4 py-3"><Stat label="Chosen retire age" value={`${proj.retireAge}`} hint="when drawdown starts" /></div>
-                <div className="px-4 py-3"><Stat label={`Portfolio @ ${proj.retireAge}`} value={usdShort(proj.lifeLiquid[retireIdx])} hint="invested at retirement" /></div>
-                <div className="px-4 py-3"><Stat label="Plan survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `broke at ${proj.depletionAge}` : `lasts to ${inp.lifeExpectancy}`} /></div>
+              <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">In retirement</div>
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3.5 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3.5 sm:grid-cols-4">
+                <Stat label="Retire at" value={`${proj.retireAge}`} hint={`${Math.max(0, inp.lifeExpectancy - proj.retireAge)} yrs of retirement`} />
+                <Stat label="Portfolio then" value={usdShort(proj.lifeLiquid[retireIdx])} hint={`invested at ${proj.retireAge}`} />
+                <Stat label="Spend" value={`${usdShort(inp.retirementSpending ?? totalSpending(inp))}/yr`} hint={inp.socialSecurity > 0 ? `+ ${usdShort(ssActual)}/yr SS from ${claimAge}` : 'no Social Security'} />
+                <Stat label="Survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `runs dry at ${proj.depletionAge}` : `leaves ${usdShort(proj.lifeLiquid[deathIdx])} at ${inp.lifeExpectancy}`} />
               </div>
               <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
                 <span className="mt-px text-sm leading-none">💡</span>
