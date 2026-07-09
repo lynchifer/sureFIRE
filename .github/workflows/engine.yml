@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# Rapid successive pushes to the same ref shouldn't run the full test suite redundantly in parallel.
+concurrency:
+  group: engine-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
