@@ -116,16 +116,29 @@ function spanText(e: LifeEvent): string {
 
 /** The single highest-leverage dial for each event kind, exposed as a slider on the COLLAPSED row so
  *  you can drag it and watch the event's "±yr to FI" badge move — no need to open the full editor. */
-function quickKnob(e: LifeEvent): { label: string; value: number; min: number; max: number; step: number; money: boolean; apply: (v: number) => Record<string, unknown> } | null {
+function quickKnob(e: LifeEvent): { label: string; value: number; min: number; max: number; step: number; money: boolean; display?: string; apply: (v: number) => Record<string, unknown> } | null {
   // Sliders need a bounded range; if the current value already exceeds the kind's cap, widen the max to
   // the next multiple of the cap so the thumb stays draggable instead of pinning to the right edge.
   const cap = (base: number, v: number) => Math.max(base, Math.ceil(v / base) * base)
   switch (e.kind) {
     case 'home': {
-      // The cash-now lever: the down payment in DOLLARS ("price" read as too vague). Price stays fixed;
-      // the slider drives downPct — more down = less mortgage but more capital pulled from investments.
-      if (e.price <= 0) return null
-      return { label: 'Down pmt', value: Math.round(e.price * e.downPct), min: 0, max: e.price, step: 5_000, money: true, apply: (v) => ({ downPct: Math.min(1, Math.max(0, v / e.price)) }) }
+      // Slide the down payment in DOLLARS and it scales the HOUSE PRICE with it — the down-% stays at
+      // whatever it's set to (20% by default) until you open the editor and change it. The value label
+      // shows the implied house cost so you always see what home the down payment buys.
+      const pct = Math.min(e.downPct, 1)
+      if (pct <= 0) return null
+      const dp = Math.round(e.price * pct)
+      return {
+        label: 'Down pmt',
+        value: dp,
+        // Slider spans a $500k–$3M house (in down-payment dollars); widens if the price already exceeds it.
+        min: Math.round(500_000 * pct),
+        max: Math.round(cap(3_000_000, e.price) * pct),
+        step: 5_000,
+        money: true,
+        display: `${usdShort(dp)} · ${usdShort(e.price)} home`,
+        apply: (v) => ({ price: Math.round(v / pct) }),
+      }
     }
     case 'child':
       return { label: 'Cost/yr', value: e.annualCost, min: 0, max: cap(60_000, e.annualCost), step: 1_000, money: true, apply: (v) => ({ annualCost: v }) }
@@ -321,7 +334,7 @@ export default function LifeEventsPanel({
                       className="h-1 w-full min-w-0 cursor-pointer"
                       style={{ accentColor: color }}
                     />
-                    <span className="w-14 shrink-0 text-right text-xs tabular-nums text-neutral-300">{k.money ? usdShort(k.value) : `${k.value} yr`}</span>
+                    <span className="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-neutral-300">{k.display ?? (k.money ? usdShort(k.value) : `${k.value} yr`)}</span>
                   </div>
                 )
               })()}
