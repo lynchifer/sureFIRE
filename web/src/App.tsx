@@ -811,7 +811,7 @@ export default function App() {
           <button
             onClick={() => void addPlan()}
             aria-label="New profile"
-            className="rounded-lg border border-dashed border-white/15 px-3 py-1.5 text-sm text-neutral-400 hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+            className="rounded-lg border border-dashed border-white/15 px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 active:bg-white/[0.06] sm:py-1.5"
           >
             + New
           </button>
@@ -824,14 +824,14 @@ export default function App() {
               <button
                 onClick={() => setMode('fixed')}
                 aria-pressed={mode === 'fixed'}
-                className={`px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60 ${mode === 'fixed' ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
+                className={`px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60 active:bg-white/[0.08] sm:py-1.5 ${mode === 'fixed' ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
               >
                 Fixed
               </button>
               <button
                 onClick={() => setMode('mc')}
                 aria-pressed={mode === 'mc'}
-                className={`px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60 ${mode === 'mc' ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
+                className={`px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60 active:bg-white/[0.08] sm:py-1.5 ${mode === 'mc' ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
               >
                 Monte Carlo
               </button>
@@ -840,7 +840,7 @@ export default function App() {
           <button
             onClick={() => setCompare((c) => !c)}
             aria-pressed={compare}
-            className={`rounded-lg border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 ${compare ? 'border-violet-500/50 bg-violet-500/10 text-white' : 'border-white/10 text-neutral-400 hover:text-neutral-200'}`}
+            className={`rounded-lg border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 active:bg-white/[0.06] sm:py-1.5 ${compare ? 'border-violet-500/50 bg-violet-500/10 text-white' : 'border-white/10 text-neutral-400 hover:text-neutral-200'}`}
           >
             {compare ? '◉ Comparing' : 'Compare'}
           </button>
@@ -1005,8 +1005,15 @@ export default function App() {
                         <span className="text-2xl sm:text-[2.1rem]">{fin ? t.years.toFixed(1) : '—'}</span>
                         {fin && <span className="text-xs font-medium text-neutral-400">yr</span>}
                       </div>
-                      <div className="mt-1.5 text-[11px] tabular-nums text-neutral-500">
-                        {fin ? <>age {t.age} · {usdShort(t.target)}</> : <>{usdShort(t.target)} target</>}
+                      <div className="mt-1.5 flex flex-wrap gap-x-1 text-[11px] tabular-nums text-neutral-500">
+                        {fin ? (
+                          <>
+                            <span className="whitespace-nowrap">age {t.age}</span>
+                            <span className="whitespace-nowrap">· {usdShort(t.target)}</span>
+                          </>
+                        ) : (
+                          <span className="whitespace-nowrap">{usdShort(t.target)} target</span>
+                        )}
                       </div>
                     </div>
                   )

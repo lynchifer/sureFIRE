@@ -66,10 +66,10 @@ function Num({
 function ToggleIncome({ income, onChange }: { income: boolean; onChange: (b: boolean) => void }) {
   return (
     <div className="flex overflow-hidden rounded-md border border-white/10 text-[11px]">
-      <button onClick={() => onChange(false)} className={`px-2 py-1 ${!income ? 'bg-rose-500/20 text-rose-300' : 'text-neutral-500'}`}>
+      <button type="button" onClick={() => onChange(false)} aria-pressed={!income} className={`px-3 py-1.5 active:bg-white/[0.06] sm:px-2 sm:py-1 ${!income ? 'bg-rose-500/20 text-rose-300' : 'text-neutral-500'}`}>
         Expense
       </button>
-      <button onClick={() => onChange(true)} className={`px-2 py-1 ${income ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>
+      <button type="button" onClick={() => onChange(true)} aria-pressed={income} className={`px-3 py-1.5 active:bg-white/[0.06] sm:px-2 sm:py-1 ${income ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>
         Income
       </button>
     </div>
@@ -85,15 +85,19 @@ function ImpactBadge({ impact }: { impact: number }) {
   if (Number.isNaN(impact))
     return <span title="No effect on the FI date" className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[11px] font-medium text-neutral-500">no FI effect</span>
   if (Math.abs(impact) < 0.05)
-    return <span title="Negligible effect on the FI date" className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-neutral-400">≈0 yr to FI</span>
+    return (
+      <span title="Negligible effect on the FI date" className="shrink-0 whitespace-nowrap rounded bg-white/[0.05] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-neutral-400">
+        ≈0 yr<span className="hidden sm:inline"> to FI</span>
+      </span>
+    )
   const delays = impact > 0
   return (
     <span
       title="Effect on your FI date vs. removing this event"
-      className={`rounded px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${delays ? 'bg-rose-500/15 text-rose-300' : 'bg-emerald-500/15 text-emerald-300'}`}
+      className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${delays ? 'bg-rose-500/15 text-rose-300' : 'bg-emerald-500/15 text-emerald-300'}`}
     >
       {delays ? '+' : '−'}
-      {Math.abs(impact).toFixed(1)} yr to FI
+      {Math.abs(impact).toFixed(1)} yr<span className="hidden sm:inline"> to FI</span>
     </span>
   )
 }
@@ -216,7 +220,7 @@ export default function LifeEventsPanel({
             <button
               key={a.kind}
               onClick={() => add(a.kind)}
-              className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-xs text-neutral-300 hover:border-emerald-500/40 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+              className="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs text-neutral-300 hover:border-emerald-500/40 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 active:bg-white/[0.08] sm:px-2 sm:py-1"
             >
               + {a.label}
             </button>
@@ -235,7 +239,7 @@ export default function LifeEventsPanel({
                 role="button"
                 tabIndex={0}
                 aria-expanded={openId === e.id}
-                className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60 ${openId === e.id ? 'bg-white/[0.03]' : ''}`}
+                className={`flex cursor-pointer items-center gap-2 px-3 py-3 text-sm transition-colors hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60 active:bg-white/[0.04] sm:gap-3 sm:py-2.5 ${openId === e.id ? 'bg-white/[0.03]' : ''}`}
                 onClick={() => setOpenId((o) => (o === e.id ? null : e.id))}
                 onKeyDown={(ev) => {
                   // Only when the row itself is focused — not keystrokes bubbling from the rename input or buttons.
@@ -245,8 +249,8 @@ export default function LifeEventsPanel({
                   }
                 }}
               >
-                <div className={`flex min-w-0 items-center gap-3 transition-opacity ${enabled ? '' : 'opacity-40'}`}>
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+                <div className={`flex min-w-0 items-center gap-2 transition-opacity sm:gap-3 ${enabled ? '' : 'opacity-40'}`}>
+                  <span className="hidden h-2.5 w-2.5 shrink-0 rounded-full sm:block" style={{ background: color }} />
                   <span className="shrink-0">{eventIcon(e)}</span>
                   {editingId === e.id ? (
                     <input
@@ -276,7 +280,7 @@ export default function LifeEventsPanel({
                       {eventTitle(e)}
                     </span>
                   )}
-                  <span className="shrink-0 text-xs tabular-nums text-neutral-500">{spanText(e)}</span>
+                  <span className="min-w-0 truncate text-xs tabular-nums text-neutral-500">{spanText(e)}</span>
                 </div>
                 <div className="flex-1" />
                 {enabled ? <ImpactBadge impact={impact} /> : <span className="text-[11px] uppercase tracking-wide text-neutral-600">off</span>}
@@ -289,9 +293,9 @@ export default function LifeEventsPanel({
                   aria-checked={enabled}
                   aria-label={`${enabled ? 'Disable' : 'Enable'} ${eventTitle(e)}`}
                   title={enabled ? 'Disable — keep it but exclude from the projection' : 'Enable'}
-                  className={`relative h-4 w-7 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 ${enabled ? 'bg-emerald-500' : 'bg-white/25'}`}
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:h-4 sm:w-7 ${enabled ? 'bg-emerald-500' : 'bg-white/25'}`}
                 >
-                  <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-3' : 'translate-x-0'}`} />
+                  <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform sm:h-3 sm:w-3 ${enabled ? 'translate-x-4 sm:translate-x-3' : 'translate-x-0'}`} />
                 </button>
                 <button
                   onClick={(ev) => {
@@ -299,7 +303,7 @@ export default function LifeEventsPanel({
                     remove(e.id)
                   }}
                   aria-label={`Remove ${eventTitle(e)}`}
-                  className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-sm leading-none text-neutral-500 transition-colors hover:border-rose-500/40 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-sm leading-none text-neutral-500 transition-colors hover:border-rose-500/40 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 active:bg-rose-500/10 sm:h-6 sm:w-6"
                   title="Remove"
                 >
                   ×
@@ -307,7 +311,7 @@ export default function LifeEventsPanel({
                 {/* Disclosure chevron — a visible chip at the row's edge (the whole row is the toggle). */}
                 <span
                   aria-hidden
-                  className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border transition-colors ${openId === e.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-neutral-300'}`}
+                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors sm:h-6 sm:w-6 ${openId === e.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-neutral-300'}`}
                 >
                   <svg viewBox="0 0 16 16" className={`h-3.5 w-3.5 transition-transform duration-150 ${openId === e.id ? 'rotate-90' : ''}`}>
                     <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.75" fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -331,7 +335,7 @@ export default function LifeEventsPanel({
                       value={k.value}
                       onChange={(ev) => patch(e.id, k.apply(Number(ev.target.value)))}
                       aria-label={`${eventTitle(e)} — quick adjust ${k.label}`}
-                      className="h-1 w-full min-w-0 cursor-pointer"
+                      className="h-6 w-full min-w-0 cursor-pointer sm:h-1"
                       style={{ accentColor: color }}
                     />
                     <span className="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-neutral-300">{k.display ?? (k.money ? usdShort(k.value) : `${k.value} yr`)}</span>
@@ -416,8 +420,8 @@ export default function LifeEventsPanel({
                         <div className="flex flex-col gap-1">
                           <span className="text-[11px] uppercase tracking-wide text-neutral-400">Whose income</span>
                           <div className="flex overflow-hidden rounded-md border border-white/10 text-[11px]">
-                            <button onClick={() => patch(e.id, { spouse: false })} className={`px-2 py-1 ${!e.spouse ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>You</button>
-                            <button onClick={() => patch(e.id, { spouse: true })} className={`px-2 py-1 ${e.spouse ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>Spouse</button>
+                            <button type="button" onClick={() => patch(e.id, { spouse: false })} aria-pressed={!e.spouse} className={`px-3 py-1.5 active:bg-white/[0.06] sm:px-2 sm:py-1 ${!e.spouse ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>You</button>
+                            <button type="button" onClick={() => patch(e.id, { spouse: true })} aria-pressed={e.spouse} className={`px-3 py-1.5 active:bg-white/[0.06] sm:px-2 sm:py-1 ${e.spouse ? 'bg-emerald-500/20 text-emerald-300' : 'text-neutral-500'}`}>Spouse</button>
                           </div>
                         </div>
                         <Num label="Start age" value={e.startAge} onChange={(v) => patch(e.id, { startAge: Math.round(v) })} />
