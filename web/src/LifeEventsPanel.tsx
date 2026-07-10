@@ -283,40 +283,45 @@ export default function LifeEventsPanel({
                   <span className="min-w-0 truncate text-xs tabular-nums text-neutral-500">{spanText(e)}</span>
                 </div>
                 <div className="flex-1" />
-                {enabled ? <ImpactBadge impact={impact} /> : <span className="text-[11px] uppercase tracking-wide text-neutral-600">off</span>}
-                <button
-                  onClick={(ev) => {
-                    ev.stopPropagation()
-                    patch(e.id, { enabled: !enabled })
-                  }}
-                  role="switch"
-                  aria-checked={enabled}
-                  aria-label={`${enabled ? 'Disable' : 'Enable'} ${eventTitle(e)}`}
-                  title={enabled ? 'Disable — keep it but exclude from the projection' : 'Enable'}
-                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:h-4 sm:w-7 ${enabled ? 'bg-emerald-500' : 'bg-white/25'}`}
-                >
-                  <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform sm:h-3 sm:w-3 ${enabled ? 'translate-x-4 sm:translate-x-3' : 'translate-x-0'}`} />
-                </button>
-                <button
-                  onClick={(ev) => {
-                    ev.stopPropagation()
-                    remove(e.id)
-                  }}
-                  aria-label={`Remove ${eventTitle(e)}`}
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-sm leading-none text-neutral-500 transition-colors hover:border-rose-500/40 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 active:bg-rose-500/10 sm:h-6 sm:w-6"
-                  title="Remove"
-                >
-                  ×
-                </button>
-                {/* Disclosure chevron — a visible chip at the row's edge (the whole row is the toggle). */}
-                <span
-                  aria-hidden
-                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors sm:h-6 sm:w-6 ${openId === e.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-neutral-300'}`}
-                >
-                  <svg viewBox="0 0 16 16" className={`h-3.5 w-3.5 transition-transform duration-150 ${openId === e.id ? 'rotate-90' : ''}`}>
-                    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.75" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
+                {/* Impact column — every event's ±yr-to-FI aligned in one right-hand spot (summary sits atop the panel). */}
+                <div className="flex w-[4.25rem] shrink-0 justify-end sm:w-[5.5rem]">
+                  {enabled ? <ImpactBadge impact={impact} /> : <span className="text-[11px] uppercase tracking-wide text-neutral-600">off</span>}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                  <button
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      patch(e.id, { enabled: !enabled })
+                    }}
+                    role="switch"
+                    aria-checked={enabled}
+                    aria-label={`${enabled ? 'Disable' : 'Enable'} ${eventTitle(e)}`}
+                    title={enabled ? 'Disable — keep it but exclude from the projection' : 'Enable'}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 sm:h-4 sm:w-7 ${enabled ? 'bg-emerald-500' : 'bg-white/25'}`}
+                  >
+                    <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform sm:h-3 sm:w-3 ${enabled ? 'translate-x-4 sm:translate-x-3' : 'translate-x-0'}`} />
+                  </button>
+                  <button
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      remove(e.id)
+                    }}
+                    aria-label={`Remove ${eventTitle(e)}`}
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-sm leading-none text-neutral-500 transition-colors hover:border-rose-500/40 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 active:bg-rose-500/10 sm:h-6 sm:w-6"
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                  {/* Disclosure chevron — a visible chip at the row's edge (the whole row is the toggle). */}
+                  <span
+                    aria-hidden
+                    className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors sm:h-6 sm:w-6 ${openId === e.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-neutral-300'}`}
+                  >
+                    <svg viewBox="0 0 16 16" className={`h-3.5 w-3.5 transition-transform duration-150 ${openId === e.id ? 'rotate-90' : ''}`}>
+                      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.75" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </div>
               </div>
 
               {/* Quick-adjust: the event's highest-leverage dial, right on the collapsed row — drag it

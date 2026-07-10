@@ -550,8 +550,9 @@ export default function App() {
   // else run the life-path MC). runLifeSuccess returns 1 when there's no drawdown (retire at/after death).
   const lifeSuccess = useMemo(() => (mc ? mc.lifeSuccessRate : runLifeSuccess(inp.retireAge == null ? { ...mcInp, retireAge: recRetire } : mcInp)), [mc, mcInp, recRetire, inp.retireAge])
   const eventColors = inp.lifeEvents.map((_, i) => EVENT_COLORS[i % EVENT_COLORS.length])
-  // Per-event marginal FIRE-date impact — computed entirely in the engine (eventImpactsJs).
-  const eventImpacts = useMemo(() => runImpacts(inp), [inp])
+  // Per-event MARGINAL FIRE-date impact (this event's effect given the rest of the plan) — computed in
+  // the engine against effInp, so each badge moves as you add/remove events AND as the retire age changes.
+  const eventImpacts = useMemo(() => runImpacts(effInp), [effInp])
   // Joint effect of ALL enabled events on the FI date (vs. a no-events projection) — the holistic
   // readout for the panel header; the per-event badges above are marginal, this is the sum story.
   const netEventImpact = useMemo(() => {

@@ -290,15 +290,17 @@ fun projectFixedJs(inputs: FireInputsJs): ProjectionResult = ProjectionResult(pr
 fun eventImpactsJs(inputs: FireInputsJs): DoubleArray {
     val all = inputs.events
     fun fireYears(evs: Array<LifeEventInput>): Double = projectFixed(inputs.toFixed(evs)).yearsToFire
-    val baseNone = fireYears(emptyArray()) // the plan with NO life events — the shared reference
+    val full = fireYears(all) // the WHOLE plan (compilation drops disabled events) — the shared reference
     val out = DoubleArray(all.size) { Double.NaN }
     for (k in all.indices) {
-        if (!all[k].enabled) continue // disabled events stay NaN
-        val onlyK = fireYears(arrayOf(all[k])) // the plan with ONLY this event
+        if (!all[k].enabled) continue // a disabled event isn't in the plan → no marginal effect
+        // MARGINAL impact: the plan with everything EXCEPT event k. So each badge answers "what does
+        // removing this cost me?" in the context of the rest — it moves as you add/remove other events.
+        val without = fireYears(Array(all.size - 1) { i -> if (i < k) all[i] else all[i + 1] })
         out[k] = when {
-            !baseNone.isNaN() && !onlyK.isNaN() -> onlyK - baseNone // + delays FIRE, − speeds it
-            !baseNone.isNaN() && onlyK.isNaN() -> Double.POSITIVE_INFINITY // this event alone prevents FIRE
-            baseNone.isNaN() && !onlyK.isNaN() -> Double.NEGATIVE_INFINITY // this event alone enables FIRE
+            !full.isNaN() && !without.isNaN() -> full - without // + this event delays FIRE, − it speeds FIRE
+            !without.isNaN() && full.isNaN() -> Double.POSITIVE_INFINITY // it pushes FI past the horizon
+            !full.isNaN() && without.isNaN() -> Double.NEGATIVE_INFINITY // it's what makes FI reachable
             else -> Double.NaN
         }
     }
