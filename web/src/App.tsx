@@ -658,9 +658,19 @@ export default function App() {
   // --- Fixed (single) -----------------------------------------------------------------------------
   const xCat = x.map(String)
   const bandSeries = (name: string, data: (number | null)[], color: string) => ({ name, type: 'line', stack: 'acc', symbol: 'none', emphasis: { disabled: true }, lineStyle: { width: 0 }, areaStyle: { color }, connectNulls: false, data })
-  const initData = x.map((_, i) => (i <= retireIdx ? inp.initialInvestments : null))
-  const savedData = x.map((_, i) => (i <= retireIdx ? proj.saved[i] - inp.initialInvestments : null))
-  const returnsData = x.map((_, i) => (i <= retireIdx ? proj.returns[i] : null))
+  // Decompose liquid into Initial / Saved / Returns as a NON-NEGATIVE bottom-up waterfall. A big capital
+  // outflow (a home down payment) drives cumulative net contributions below the starting stake, so the
+  // naive `saved − initial` goes negative and ECharts stacks it downward through zero — a broken band.
+  // Clamp each slice to what's actually left; the three still sum to liquid exactly (returns⩾0, saved⩽liquid).
+  const bandAt = (i: number) => {
+    const total = Math.max(0, proj.liquid[i])
+    const initialB = Math.min(inp.initialInvestments, total)
+    const savedB = Math.max(0, Math.min(proj.saved[i] - inp.initialInvestments, total - initialB))
+    return { initialB, savedB, returnsB: total - initialB - savedB }
+  }
+  const initData = x.map((_, i) => (i <= retireIdx ? bandAt(i).initialB : null))
+  const savedData = x.map((_, i) => (i <= retireIdx ? bandAt(i).savedB : null))
+  const returnsData = x.map((_, i) => (i <= retireIdx ? bandAt(i).returnsB : null))
   const drawData = x.map((_, i) => (hasRetirement && i >= retireIdx ? proj.lifeLiquid[i] : null))
   // Home equity = the tracked homeValue − amortizing mortgageBalance. Shade it as a band stacked on top
   // of the liquid balance, so the gap between the balance and net-worth lines literally reads as equity.
