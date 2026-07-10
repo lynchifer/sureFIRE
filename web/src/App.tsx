@@ -9,7 +9,7 @@ import { listPlans, savePlan, deletePlan } from './api'
 import type { PlanDTO } from './api'
 import { PLAN_COLORS, newPlan } from './plans'
 import LifeEventsPanel from './LifeEventsPanel'
-import { eventAge, eventIcon, eventSpan, EVENT_COLORS, normalizeEvents, isEnabled } from './lifeEvents'
+import { eventAge, eventIcon, eventSpan, EVENT_COLORS, normalizeEvents, isEnabled, newEvent } from './lifeEvents'
 import { useClearableNumber, groupThousands } from './useClearableNumber'
 
 /** Migrate a saved plan's legacy single `spending` number into the Housing/Discretionary/Fixed split:
@@ -549,6 +549,35 @@ export default function App() {
   // Probability the plan lasts if you retire AT the effective RE age (reuse the MC-mode result when shown,
   // else run the life-path MC). runLifeSuccess returns 1 when there's no drawdown (retire at/after death).
   const lifeSuccess = useMemo(() => (mc ? mc.lifeSuccessRate : runLifeSuccess(inp.retireAge == null ? { ...mcInp, retireAge: recRetire } : mcInp)), [mc, mcInp, recRetire, inp.retireAge])
+  // "What else could this plan afford?" — binary-searched headroom on the fast deterministic (steady-return)
+  // projection. Runs off the debounced input so it catches up ~150ms after you pause typing.
+  const analysis = useMemo(() => {
+    const base = inp.retireAge == null ? { ...mcInp, retireAge: recRetire } : mcInp
+    const ra = base.retireAge ?? recRetire
+    // "survives" = the deterministic drawdown lasts to the death age (money never runs out).
+    const survives = (i: FireInputs) => { const d = runFixed(i).depletionAge; return d < 0 || d >= base.lifeExpectancy }
+    if (!survives(base)) return null // already stretched at the chosen age — nothing to spare
+    // Largest value of a continuous lever that still survives (22 bisections ≈ ±0.0002 of the range).
+    const maxScalar = (hi: number, apply: (v: number) => Partial<FireInputs>) => {
+      let lo = 0, h = hi
+      for (let k = 0; k < 22; k++) { const m = (lo + h) / 2; if (survives({ ...base, ...apply(m) })) lo = m; else h = m }
+      return lo
+    }
+    const baseRetSpend = base.retirementSpending && base.retirementSpending > 0 ? base.retirementSpending : totalSpending(base)
+    const extraSpend = maxScalar(baseRetSpend * 2 + 100_000, (v) => ({ retirementSpending: baseRetSpend + v }))
+    // Priciest primary home you could buy AT retirement (20% down) and still last — only if you're not
+    // already modelling one (a held home replaces rent, so stacking a second is meaningless here).
+    const ownsHome = base.lifeEvents.some((e) => e.kind === 'home' && isEnabled(e))
+    const homePrice = ownsHome ? null : maxScalar(4_000_000, (v) => ({ lifeEvents: [...base.lifeEvents, { ...newEvent('home', base.currentAge), buyAge: ra, price: v }] }))
+    // How many additional kids (staggered every 2 yrs) you could raise and still last.
+    let kids = 0
+    for (let n = 1; n <= 6; n++) {
+      const extra = Array.from({ length: n }, (_, j) => ({ ...newEvent('child', base.currentAge), startAge: base.currentAge + 1 + j * 2 }))
+      if (survives({ ...base, lifeEvents: [...base.lifeEvents, ...extra] })) kids = n
+      else break
+    }
+    return { ra, extraSpend, homePrice, kids }
+  }, [mcInp, recRetire, inp.retireAge])
   const eventColors = inp.lifeEvents.map((_, i) => EVENT_COLORS[i % EVENT_COLORS.length])
   // Per-event MARGINAL FIRE-date impact (this event's effect given the rest of the plan) — computed in
   // the engine against effInp, so each badge moves as you add/remove events AND as the retire age changes.
@@ -1048,9 +1077,42 @@ export default function App() {
                     <span className="text-rose-400"> Yours runs dry at {proj.depletionAge}.</span>
                   ) : proj.retireAge < recRetire ? (
                     <span className="text-amber-300"> Your age {proj.retireAge} only clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
-                  ) : null}
+                  ) : (
+                    <span className="text-emerald-300"> Your age {proj.retireAge} clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
+                  )}
                 </p>
               </div>
+              {analysis && (analysis.extraSpend > 1000 || (analysis.homePrice ?? 0) > 60_000 || analysis.kids >= 1) && (
+                <div className="mt-2 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3.5 py-3">
+                  <p className="text-[11px] leading-relaxed text-neutral-500">
+                    Retiring at <span className="text-neutral-300">{analysis.ra}</span> (steady returns), you'd have room to also…
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {analysis.homePrice != null && analysis.homePrice > 60_000 && (
+                      <span className="inline-flex items-baseline gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5">
+                        <span className="text-sm">🏠</span>
+                        <span className="text-sm font-semibold text-neutral-100">{usdShort(analysis.homePrice)}{analysis.homePrice >= 4_000_000 ? '+' : ''}</span>
+                        <span className="text-[11px] text-neutral-500">home</span>
+                      </span>
+                    )}
+                    {analysis.kids >= 1 && (
+                      <span className="inline-flex items-baseline gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5">
+                        <span className="text-sm">👶</span>
+                        <span className="text-sm font-semibold text-neutral-100">{analysis.kids}{analysis.kids >= 6 ? '+' : ''}</span>
+                        <span className="text-[11px] text-neutral-500">more kid{analysis.kids > 1 ? 's' : ''}</span>
+                      </span>
+                    )}
+                    {analysis.extraSpend > 1000 && (
+                      <span className="inline-flex items-baseline gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5">
+                        <span className="text-sm">💸</span>
+                        <span className="text-sm font-semibold text-neutral-100">+{usdShort(analysis.extraSpend)}/yr</span>
+                        <span className="text-[11px] text-neutral-500">spending</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-[10px] leading-snug text-neutral-600">Each shown on its own — the most of that one thing your plan sustains to {inp.lifeExpectancy} at your fixed return, holding the rest.</p>
+                </div>
+              )}
               {showMc && mc && (
                 <div className="mt-2 text-xs text-neutral-500">
                   {Number.isFinite(mc.medianYears)
