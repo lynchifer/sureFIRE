@@ -8,7 +8,7 @@ const D = EventDefaults.getInstance() // engine-owned default modeling values fo
 // Every event carries `enabled`: a disabled event stays in the list (and on its profile) but is
 // excluded from the projection, so you can A/B its impact without deleting it.
 export type LifeEvent =
-  | { id: string; enabled: boolean; name?: string; kind: 'child'; startAge: number; years: number; annualCost: number; birthCost: number }
+  | { id: string; enabled: boolean; name?: string; kind: 'child'; startAge: number; years: number; annualCost: number; birthCost: number; collegeCost: number }
   | {
       id: string
       enabled: boolean
@@ -40,7 +40,7 @@ export function newEvent(kind: EventKind, currentAge: number): LifeEvent {
   const id = uid()
   switch (kind) {
     case 'child':
-      return { id, enabled: true, kind, startAge: currentAge + 2, years: D.childYears, annualCost: D.childAnnualCost, birthCost: D.childBirthCost }
+      return { id, enabled: true, kind, startAge: currentAge + 2, years: D.childYears, annualCost: D.childAnnualCost, birthCost: D.childBirthCost, collegeCost: D.childCollegeCost }
     case 'home':
       return { id, enabled: true, kind, buyAge: currentAge + 3, price: D.homePrice, downPct: D.homeDownPct, mortgageRate: D.homeMortgageRate, termYears: D.homeTermYears, appreciation: D.homeAppreciation, ongoingPct: D.homeOngoingPct, sellPct: D.homeSellPct, sellAge: null }
     case 'oneTime':
@@ -94,7 +94,13 @@ export const eventSpan = (e: LifeEvent): [number, number] =>
 
 /** Fill any fields a saved event is missing (added in later versions) from the kind's defaults. */
 export function normalizeEvents(events: LifeEvent[], currentAge: number): LifeEvent[] {
-  return events.map((e) => ({ ...newEvent(e.kind, currentAge), ...e }) as LifeEvent)
+  return events.map((e) => {
+    const filled = { ...newEvent(e.kind, currentAge), ...e } as LifeEvent
+    // A child saved before the college field existed keeps its old economics (backfill $0, not the
+    // recommended default) — loading a plan must never silently add a $100k expense.
+    if (filled.kind === 'child' && (e as { collegeCost?: number }).collegeCost === undefined) filled.collegeCost = 0
+    return filled
+  })
 }
 
 /** Distinct colors assigned to events by index (chart duration band + list dot). */

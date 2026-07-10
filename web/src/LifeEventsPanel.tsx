@@ -346,11 +346,15 @@ export default function LifeEventsPanel({
               {openId === e.id && (
                 <div className="border-t border-white/[0.05] bg-black/20 px-3 py-3">
                   {e.kind === 'child' && (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <Num label="Born at age" value={e.startAge} onChange={(v) => patch(e.id, { startAge: Math.round(v) })} />
-                      <Num label="For years" value={e.years} onChange={(v) => patch(e.id, { years: Math.round(v) })} />
-                      <Num label="Annual cost" prefix="$" step={1000} value={e.annualCost} onChange={(v) => patch(e.id, { annualCost: v })} />
-                      <Num label="One-time" prefix="$" step={1000} value={e.birthCost} onChange={(v) => patch(e.id, { birthCost: v })} />
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <Num label="Born at age" value={e.startAge} onChange={(v) => patch(e.id, { startAge: Math.round(v) })} />
+                        <Num label="For years" value={e.years} onChange={(v) => patch(e.id, { years: Math.round(v) })} />
+                        <Num label="Annual cost" prefix="$" step={1000} value={e.annualCost} onChange={(v) => patch(e.id, { annualCost: v })} />
+                        <Num label="Birth cost" prefix="$" step={1000} value={e.birthCost} onChange={(v) => patch(e.id, { birthCost: v })} />
+                        <Num label="College @ 18" prefix="$" step={5000} value={e.collegeCost} onChange={(v) => patch(e.id, { collegeCost: v })} />
+                      </div>
+                      <p className="text-[11px] leading-snug text-neutral-500">College lands as one lump sum (today's dollars) when the child turns 18 — the default ≈ 4 years all-in at a public in-state university. Set $0 if they're covering it.</p>
                     </div>
                   )}
                   {e.kind === 'home' && (

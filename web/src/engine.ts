@@ -148,7 +148,7 @@ function toEngineEvent(e: LifeEvent): LifeEventInput {
   const on = isEnabled(e)
   switch (e.kind) {
     case 'child':
-      return childEvent(e.startAge, e.years, e.annualCost, e.birthCost, on)
+      return childEvent(e.startAge, e.years, e.annualCost, e.birthCost, e.collegeCost ?? 0, on)
     case 'home':
       return homeEvent(e.buyAge, e.price, e.downPct, e.mortgageRate, e.termYears, e.appreciation, e.ongoingPct, e.sellPct ?? 0, e.sellAge ?? -1, on)
     case 'oneTime':

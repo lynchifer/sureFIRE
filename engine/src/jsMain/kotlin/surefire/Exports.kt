@@ -31,6 +31,9 @@ object EventDefaults {
     const val childYears: Int = 18
     const val childAnnualCost: Double = 15_000.0
     const val childBirthCost: Double = 5_000.0
+    // ≈ 4 years all-in (tuition + room & board) at a public in-state university, in today's dollars
+    // (College Board 2024-25 budgets run ~$25-30k/yr). Lands as one lump when the child turns 18.
+    const val childCollegeCost: Double = 100_000.0
     const val homePrice: Double = 400_000.0
     const val homeDownPct: Double = 0.2
     const val homeMortgageRate: Double = 0.065
@@ -56,6 +59,8 @@ class LifeEventInput(
     val years: Int = 0,
     val annualCost: Double = 0.0,
     val birthCost: Double = 0.0,
+    val collegeCost: Double = 0.0, // child: lump-sum college cost (today's $) at birth + 18
+
     val buyAge: Int = 0,
     val price: Double = 0.0,
     val downPct: Double = 0.0,
@@ -79,8 +84,8 @@ class LifeEventInput(
 )
 
 @JsExport
-fun childEvent(startAge: Int, years: Int, annualCost: Double, birthCost: Double, enabled: Boolean): LifeEventInput =
-    LifeEventInput(kind = "child", startAge = startAge, years = years, annualCost = annualCost, birthCost = birthCost, enabled = enabled)
+fun childEvent(startAge: Int, years: Int, annualCost: Double, birthCost: Double, collegeCost: Double, enabled: Boolean): LifeEventInput =
+    LifeEventInput(kind = "child", startAge = startAge, years = years, annualCost = annualCost, birthCost = birthCost, collegeCost = collegeCost, enabled = enabled)
 
 @JsExport
 fun homeEvent(buyAge: Int, price: Double, downPct: Double, mortgageRate: Double, termYears: Int, appreciation: Double, ongoingPct: Double, sellPct: Double, sellAge: Int, enabled: Boolean): LifeEventInput =
@@ -121,7 +126,7 @@ private fun compileEvents(events: Array<LifeEventInput>): Compiled {
     for (e in events) {
         if (!e.enabled) continue // disabled events don't affect the projection
         when (e.kind) {
-            "child" -> cashFlows += Presets.childFlows(e.startAge, e.years, e.annualCost, e.birthCost)
+            "child" -> cashFlows += Presets.childFlows(e.startAge, e.years, e.annualCost, e.birthCost, e.collegeCost)
             "home" -> properties += Presets.homeProperty(e.buyAge, e.price, e.downPct, e.mortgageRate, e.termYears, e.appreciation, e.ongoingPct, e.sellPct, if (e.sellAge < 0) null else e.sellAge)
             "oneTime" -> cashFlows += Presets.oneTimeFlow(e.age, e.amount, e.income)
             "marriage" -> {

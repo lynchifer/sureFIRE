@@ -7,11 +7,16 @@ package surefire
  * and its parameters; the JS facade ([compileEvents]) dispatches to the functions below.
  */
 object Presets {
-    /** A dependent: an inflating annual expense over [years], plus an optional one-time birth cost. */
-    fun childFlows(startAge: Int, years: Int, annualCost: Double, birthCost: Double): List<CashFlow> {
-        val out = ArrayList<CashFlow>(2)
+    /** The age a child starts college — the lump-sum [childFlows] collegeCost lands at birth + this. */
+    const val COLLEGE_AGE: Int = 18
+
+    /** A dependent: an inflating annual expense over [years], an optional one-time birth cost, and an
+     *  optional lump-sum college cost (today's dollars) landing when the child turns [COLLEGE_AGE]. */
+    fun childFlows(startAge: Int, years: Int, annualCost: Double, birthCost: Double, collegeCost: Double = 0.0): List<CashFlow> {
+        val out = ArrayList<CashFlow>(3)
         out.add(CashFlow(-annualCost, startAge, startAge + years - 1, inflates = true))
         if (birthCost > 0.0) out.add(CashFlow(-birthCost, startAge, startAge, inflates = true))
+        if (collegeCost > 0.0) out.add(CashFlow(-collegeCost, startAge + COLLEGE_AGE, startAge + COLLEGE_AGE, inflates = true))
         return out
     }
 

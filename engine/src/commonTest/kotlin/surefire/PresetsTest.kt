@@ -25,6 +25,17 @@ class PresetsTest {
     }
 
     @Test
+    fun childCollegeCostLandsAsOneLumpAtEighteen() {
+        val flows = Presets.childFlows(startAge = 30, years = 18, annualCost = 15_000.0, birthCost = 0.0, collegeCost = 100_000.0)
+        assertEquals(2, flows.size)
+        val college = flows[1]
+        assertEquals(-100_000.0, college.amount)
+        assertEquals(48, college.startAge) // born at 30 → college at 30 + 18
+        assertEquals(48, college.endAge) // one-time lump, not a stream
+        assertTrue(college.inflates) // today's (real) dollars
+    }
+
+    @Test
     fun homeDownPaymentIsPriceTimesPct() {
         val p = Presets.homeProperty(35, 400_000.0, 0.2, 0.065, 30, 0.007, 0.02, 0.07, null)
         assertEquals(80_000.0, p.downPayment)
