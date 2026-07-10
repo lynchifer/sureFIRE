@@ -6,6 +6,7 @@ import {
   monteCarloJs,
   lifeSuccessRateJs,
   recommendedRetireAgeJs,
+  affordabilityJs,
   eventImpactsJs,
   socialSecurityBenefitJs,
   childEvent,
@@ -234,6 +235,27 @@ export function recommendedRetireAge(i: FireInputs): number {
 /** Marginal effect of each life event on the FIRE date (years), aligned to `i.lifeEvents` (disabled → NaN). */
 export function runImpacts(i: FireInputs): number[] {
   return arr(eventImpactsJs(toInputs(i)))
+}
+
+export interface AffordabilityView {
+  survives: boolean // does the plan clear the ~80% survival bar at its retire age? (else no headroom)
+  extraSpend: number // additional real $/yr of retirement spending it sustains
+  extraSpendAtCap: boolean // search hit its ceiling ⇒ the true figure is ≥ this
+  homePrice: number // priciest home bought at retirement; < 0 ⇒ not applicable (already owns one)
+  homePriceAtCap: boolean
+  kids: number // additional staggered children it could raise
+  kidsAtCap: boolean
+}
+
+/** "What else could this plan afford?" — the most of each single lever (extra spend, a home, more kids)
+ *  the plan sustains at the SAME ~80% Monte Carlo survival bar as the recommended retire age, evaluated at
+ *  `i.retireAge`. All the binary-searching happens in the engine (fast, risk-adjusted, one boundary call). */
+export function runAffordability(i: FireInputs): AffordabilityView {
+  const a = affordabilityJs(toInputs(i))
+  return {
+    survives: a.survives, extraSpend: a.extraSpend, extraSpendAtCap: a.extraSpendAtCap,
+    homePrice: a.homePrice, homePriceAtCap: a.homePriceAtCap, kids: a.kids, kidsAtCap: a.kidsAtCap,
+  }
 }
 
 /** Claim-age-adjusted annual Social Security benefit (engine math) for the given age-67 benefit. */

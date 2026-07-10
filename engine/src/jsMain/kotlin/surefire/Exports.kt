@@ -357,3 +357,29 @@ fun lifeSuccessRateJs(inputs: FireInputsJs): Double {
  *  death age at least [MonteCarloModel.RECOMMEND_SURVIVAL] (80%) of the time. Risk-adjusted, not average-case. */
 @JsExport
 fun recommendedRetireAgeJs(inputs: FireInputsJs): Int = recommendedRetireAge(inputs.toFixed())
+
+/** Affordability headroom at the retire age in [inputs] (set it to the recommended age for the "at your
+ *  recommended retirement" story). Each lever is the most of that one thing the plan sustains at the same
+ *  ~80% Monte Carlo survival bar as the recommendation — home & child terms come from [EventDefaults] so an
+ *  "affordable home" matches a hand-added one. `*AtCap` ⇒ the search maxed out (report the value as ≥). */
+@JsExport
+class AffordabilityJs(
+    val survives: Boolean,
+    val extraSpend: Double,
+    val extraSpendAtCap: Boolean,
+    val homePrice: Double, // < 0 ⇒ not applicable (the plan already models a home)
+    val homePriceAtCap: Boolean,
+    val kids: Int,
+    val kidsAtCap: Boolean,
+)
+
+@JsExport
+fun affordabilityJs(inputs: FireInputsJs): AffordabilityJs {
+    val a = affordability(
+        inputs.toFixed(),
+        EventDefaults.homeDownPct, EventDefaults.homeMortgageRate, EventDefaults.homeTermYears,
+        EventDefaults.homeAppreciation, EventDefaults.homeOngoingPct, EventDefaults.homeSellPct,
+        EventDefaults.childYears, EventDefaults.childAnnualCost, EventDefaults.childBirthCost, EventDefaults.childCollegeCost,
+    )
+    return AffordabilityJs(a.survives, a.extraSpend, a.extraSpendAtCap, a.homePrice, a.homePriceAtCap, a.kids, a.kidsAtCap)
+}

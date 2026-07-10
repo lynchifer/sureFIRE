@@ -243,3 +243,96 @@ fun recommendedRetireAge(inp: FixedInputs, threshold: Double = MonteCarloModel.R
     }
     return lo
 }
+
+// --- Affordability headroom ------------------------------------------------------------------------
+
+/** The most of each single lever a plan can ADD and still clear [MonteCarloModel.RECOMMEND_SURVIVAL]
+ *  Monte Carlo survival to the death age, holding the retire age and the rest of the plan fixed. Reported
+ *  at the SAME risk-adjusted bar as the recommended retire age — so this headroom is consistent with the
+ *  rest of the story, unlike a deterministic steady-return test (which, for an over-funded early
+ *  retirement whose portfolio compounds faster than it draws, "affords" almost anything). */
+class Affordability(
+    val survives: Boolean,       // does the plan itself clear the bar? if not, every lever is 0 / n-a
+    val extraSpend: Double,      // additional real $/yr of retirement spending it sustains
+    val extraSpendAtCap: Boolean, // the search hit its ceiling ⇒ the true figure is ≥ this
+    val homePrice: Double,       // priciest home bought AT retirement (search terms); <0 ⇒ already owns one (n-a)
+    val homePriceAtCap: Boolean,
+    val kids: Int,               // additional staggered children it could raise
+    val kidsAtCap: Boolean,
+)
+
+private const val AFFORD_SPEND_CAP = 2_000_000.0 // most extra real $/yr of retirement spend the search probes
+private const val AFFORD_HOME_CAP = 5_000_000.0  // priciest home the search probes
+private const val AFFORD_KIDS_CAP = 8            // most additional kids the search probes
+private const val AFFORD_BISECTIONS = 20         // ~cap/2^20 resolution — finer than the UI ever displays
+
+/**
+ * Binary-search the headroom on each lever at the risk-adjusted survival bar. Survival is monotonic in
+ * every lever (more spending / a pricier home / another child is strictly costlier), so a bisection for the
+ * largest still-surviving value is exact. The home & child terms are passed in (the JS layer owns the
+ * defaults a UI seeds new events with) so an "affordable home" uses the exact economics a hand-added one would.
+ */
+fun affordability(
+    inp: FixedInputs,
+    homeDownPct: Double, homeMortgageRate: Double, homeTermYears: Int,
+    homeAppreciation: Double, homeOngoingPct: Double, homeSellPct: Double,
+    childYears: Int, childAnnualCost: Double, childBirthCost: Double, childCollegeCost: Double,
+    threshold: Double = MonteCarloModel.RECOMMEND_SURVIVAL,
+    runs: Int = MonteCarloModel.RECOMMEND_RUNS,
+): Affordability {
+    fun survives(i: FixedInputs): Boolean = lifeSuccessRate(
+        i, i.stockReturn, i.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
+        MonteCarloModel.CORRELATION, MonteCarloModel.NU, runs, MonteCarloModel.SEED,
+    ) >= threshold
+
+    // Already stretched at this retire age ⇒ nothing to spare on any lever.
+    if (!survives(inp)) return Affordability(false, 0.0, false, -1.0, false, 0, false)
+
+    val effRetAge = Finance.effectiveRetireAge(inp.currentAge, inp.retireAge, inp.socialSecurityAge)
+    val end = inp.lifeExpectancy
+
+    // Largest lever value in [0, cap] that still survives (apply(0) is a no-op, which we know survives).
+    fun maxScalar(cap: Double, apply: (Double) -> FixedInputs): Double {
+        var lo = 0.0
+        var hi = cap
+        repeat(AFFORD_BISECTIONS) {
+            val mid = (lo + hi) / 2
+            if (survives(apply(mid))) lo = mid else hi = mid
+        }
+        return lo
+    }
+
+    // Extra retirement spending: an added recurring spending stream from retirement through the death age
+    // (funded by the drawdown, tax-grossed like the base spend — so `v` reads as real after-tax lifestyle).
+    val extraSpend = maxScalar(AFFORD_SPEND_CAP) { v ->
+        inp.copy(cashFlows = inp.cashFlows + Presets.customFlow(effRetAge, end, v, income = false, inflates = true))
+    }
+
+    // Priciest primary home bought AT retirement — only if not already modeling one (a held home replaces
+    // rent, so stacking a second is meaningless). A $0 home is a no-op that just frees rent ⇒ survives.
+    val ownsHome = inp.properties.isNotEmpty()
+    val homePrice = if (ownsHome) -1.0 else maxScalar(AFFORD_HOME_CAP) { v ->
+        inp.copy(properties = inp.properties + Presets.homeProperty(
+            effRetAge, v, homeDownPct, homeMortgageRate, homeTermYears, homeAppreciation, homeOngoingPct, homeSellPct, null,
+        ))
+    }
+
+    // Additional children, each staggered two years apart starting next year — the largest count that survives.
+    var kids = 0
+    for (n in 1..AFFORD_KIDS_CAP) {
+        val extra = (0 until n).flatMap { j ->
+            Presets.childFlows(inp.currentAge + 1 + j * 2, childYears, childAnnualCost, childBirthCost, childCollegeCost)
+        }
+        if (survives(inp.copy(cashFlows = inp.cashFlows + extra))) kids = n else break
+    }
+
+    return Affordability(
+        survives = true,
+        extraSpend = extraSpend,
+        extraSpendAtCap = extraSpend >= AFFORD_SPEND_CAP * 0.98,
+        homePrice = homePrice,
+        homePriceAtCap = homePrice >= AFFORD_HOME_CAP * 0.98,
+        kids = kids,
+        kidsAtCap = kids >= AFFORD_KIDS_CAP,
+    )
+}
