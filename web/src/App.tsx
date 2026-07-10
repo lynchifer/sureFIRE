@@ -1066,60 +1066,65 @@ export default function App() {
                 <Stat label="Spend" value={`${usdShort(inp.retirementSpending ?? totalSpending(inp))}/yr`} hint={inp.socialSecurity > 0 ? `+ ${usdShort(ssActual)}/yr SS from ${claimAge}` : 'no Social Security'} />
                 <Stat label="Survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `runs dry at ${proj.depletionAge}` : `leaves ${usdShort(proj.lifeLiquid[deathIdx])} at ${inp.lifeExpectancy}`} />
               </div>
-              <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
-                <span className="mt-px text-sm leading-none">💡</span>
-                <p className="text-xs leading-relaxed text-neutral-400">
-                  <button type="button" onClick={() => set('retireAge', recRetire)} className="font-semibold text-emerald-400 underline decoration-dotted underline-offset-2 hover:text-emerald-300">
-                    Age {recRetire}
-                  </button>{' '}
-                  is the earliest you can retire with ~<span className="font-semibold text-emerald-300">80%</span> of markets lasting to {inp.lifeExpectancy}.
-                  {planBroke ? (
-                    <span className="text-rose-400"> Yours runs dry at {proj.depletionAge}.</span>
-                  ) : proj.retireAge < recRetire ? (
-                    <span className="text-amber-300"> Your age {proj.retireAge} only clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
-                  ) : (
-                    <span className="text-emerald-300"> Your age {proj.retireAge} clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
-                  )}
-                </p>
-              </div>
-              {analysis && (analysis.extraSpend > 1000 || (analysis.homePrice ?? 0) > 60_000 || analysis.kids >= 1) && (
-                <div className="mt-2 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3.5 py-3">
-                  <p className="text-[11px] leading-relaxed text-neutral-500">
-                    Retiring at <span className="text-neutral-300">{analysis.ra}</span> (steady returns), you'd have room to also…
+              <div className="mt-4 flex items-baseline justify-between gap-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Analysis</div>
+                {showMc && mc && (
+                  <p className="truncate text-[11px] tabular-nums text-neutral-500">
+                    {Number.isFinite(mc.medianYears)
+                      ? `${(mc.successRate * 100).toFixed(0)}% reach FI in ${inp.maxYears} yr${Number.isFinite(mc.p10Years) ? ` · p10–p90 ${mc.p10Years.toFixed(0)}–${mc.p90Years.toFixed(0)}` : ''}`
+                      : `most paths miss FI in ${inp.maxYears} yr`}
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {analysis.homePrice != null && analysis.homePrice > 60_000 && (
-                      <span className="inline-flex items-baseline gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5">
-                        <span className="text-sm">🏠</span>
-                        <span className="text-sm font-semibold text-neutral-100">{usdShort(analysis.homePrice)}{analysis.homePrice >= 4_000_000 ? '+' : ''}</span>
-                        <span className="text-[11px] text-neutral-500">home</span>
-                      </span>
+                )}
+              </div>
+              <div className="mt-2 space-y-3 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3.5">
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-px text-sm leading-none">💡</span>
+                  <p className="text-xs leading-relaxed text-neutral-400">
+                    <button type="button" onClick={() => set('retireAge', recRetire)} className="font-semibold text-emerald-400 underline decoration-dotted underline-offset-2 hover:text-emerald-300">
+                      Age {recRetire}
+                    </button>{' '}
+                    is the earliest you can retire with ~<span className="font-semibold text-emerald-300">80%</span> of markets lasting to {inp.lifeExpectancy}.
+                    {planBroke ? (
+                      <span className="text-rose-400"> Yours runs dry at {proj.depletionAge}.</span>
+                    ) : proj.retireAge < recRetire ? (
+                      <span className="text-amber-300"> Your age {proj.retireAge} only clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
+                    ) : (
+                      <span className="text-emerald-300"> Your age {proj.retireAge} clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
                     )}
-                    {analysis.kids >= 1 && (
-                      <span className="inline-flex items-baseline gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5">
-                        <span className="text-sm">👶</span>
-                        <span className="text-sm font-semibold text-neutral-100">{analysis.kids}{analysis.kids >= 6 ? '+' : ''}</span>
-                        <span className="text-[11px] text-neutral-500">more kid{analysis.kids > 1 ? 's' : ''}</span>
-                      </span>
-                    )}
-                    {analysis.extraSpend > 1000 && (
-                      <span className="inline-flex items-baseline gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5">
-                        <span className="text-sm">💸</span>
-                        <span className="text-sm font-semibold text-neutral-100">+{usdShort(analysis.extraSpend)}/yr</span>
-                        <span className="text-[11px] text-neutral-500">spending</span>
-                      </span>
-                    )}
+                  </p>
+                </div>
+                {analysis && (analysis.extraSpend > 1000 || (analysis.homePrice ?? 0) > 60_000 || analysis.kids >= 1) && (
+                  <div className="border-t border-white/[0.06] pt-3">
+                    <p className="text-[11px] leading-relaxed text-neutral-500">
+                      At age <span className="text-neutral-300">{analysis.ra}</span> you'd still have room for…
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {analysis.homePrice != null && analysis.homePrice > 60_000 && (
+                        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
+                          <span className="text-sm">🏠</span>
+                          <span className="text-sm font-semibold text-neutral-100">{usdShort(analysis.homePrice)}{analysis.homePrice >= 4_000_000 ? '+' : ''}</span>
+                          <span className="text-[11px] text-neutral-500">home</span>
+                        </span>
+                      )}
+                      {analysis.kids >= 1 && (
+                        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
+                          <span className="text-sm">👶</span>
+                          <span className="text-sm font-semibold text-neutral-100">{analysis.kids}{analysis.kids >= 6 ? '+' : ''}</span>
+                          <span className="text-[11px] text-neutral-500">more kid{analysis.kids > 1 ? 's' : ''}</span>
+                        </span>
+                      )}
+                      {analysis.extraSpend > 1000 && (
+                        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
+                          <span className="text-sm">💸</span>
+                          <span className="text-sm font-semibold text-neutral-100">+{usdShort(analysis.extraSpend)}/yr</span>
+                          <span className="text-[11px] text-neutral-500">spending</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 text-[10px] leading-snug text-neutral-600">Each is the most of that one thing your plan sustains to {inp.lifeExpectancy} on its steady-return path, holding the rest.</p>
                   </div>
-                  <p className="mt-2 text-[10px] leading-snug text-neutral-600">Each shown on its own — the most of that one thing your plan sustains to {inp.lifeExpectancy} at your fixed return, holding the rest.</p>
-                </div>
-              )}
-              {showMc && mc && (
-                <div className="mt-2 text-xs text-neutral-500">
-                  {Number.isFinite(mc.medianYears)
-                    ? `${(mc.successRate * 100).toFixed(0)}% reach FI within ${inp.maxYears} yrs${Number.isFinite(mc.p10Years) ? ` · FI p10–p90 ${mc.p10Years.toFixed(0)}–${mc.p90Years.toFixed(0)} yr` : ''}`
-                    : `Most paths don't reach FI within ${inp.maxYears} years`}
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {compare && (
