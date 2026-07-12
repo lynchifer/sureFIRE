@@ -246,6 +246,7 @@ class ProjectionResult(
     val fireTarget: Double,
     val retirementEventCost: Double,
     val retireSpend: Double, // resolved retirement spending (override, or total minus the rent a held home replaces)
+    val fiProgress: Double, // today's liquid ÷ the FIRE target, clamped to [0,1]
     val savingsRate: Double,
     val yearsToFire: Double,
     val ageAtFire: Int,
@@ -272,7 +273,7 @@ class ProjectionResult(
 )
 
 private fun ProjectionResult(p: Projection) = ProjectionResult(
-    p.fireTarget, p.retirementEventCost, p.retireSpend, p.savingsRate, p.yearsToFire, p.ageAtFire,
+    p.fireTarget, p.retirementEventCost, p.retireSpend, p.fiProgress, p.savingsRate, p.yearsToFire, p.ageAtFire,
     p.leanTarget, p.leanYears, p.leanAge, p.fatTarget, p.fatYears, p.fatAge, p.netWorthAtFire,
     p.retireAge, p.claimAge, p.depletionAge, p.lifeLiquid, p.lifeNetWorth,
     p.ages, p.liquid, p.saved, p.returns, p.netWorth, p.cash, p.homeValue, p.mortgageBalance,
@@ -402,6 +403,9 @@ class AnalysisJs(
     val recommendedRetireAge: Int, // earliest age clearing ~80% Monte Carlo survival
     val retireAge: Int,            // the age analyzed: the explicit input, else the recommendation
     val lifeSuccess: Double,       // survival to the death age retiring AT [retireAge]
+    val coastAge: Int,             // earliest stop-saving age still clearing ~80% (Coast FI); -1 = no slack
+    val p10DepletionAge: Int,      // the roughest-decile path's dry age; -1 = even it lasts to the death age
+    val p10FinalBalance: Double,   // the roughest-decile balance at death (0 when ≥10% of paths deplete)
     val affordability: AffordabilityJs,
     val insights: InsightsJs,
 )
@@ -419,7 +423,7 @@ fun analysisJs(inputs: FireInputsJs): AnalysisJs {
     val a = r.affordability
     val i = r.insights
     return AnalysisJs(
-        r.recommendedRetireAge, r.retireAge, r.lifeSuccess,
+        r.recommendedRetireAge, r.retireAge, r.lifeSuccess, r.coastAge, r.p10DepletionAge, r.p10FinalBalance,
         AffordabilityJs(a.survives, a.extraSpend, a.extraSpendAtCap, a.homePrice, a.homePriceAtCap, a.kids, a.kidsAtCap),
         InsightsJs(
             InsightNudges.SPEND_PER_YEAR, InsightNudges.INCOME_PER_YEAR, InsightNudges.ALLOC_SHIFT,

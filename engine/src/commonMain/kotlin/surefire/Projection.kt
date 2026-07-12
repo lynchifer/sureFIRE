@@ -222,7 +222,10 @@ internal fun simulate(rawInp: FixedInputs, gByYear: DoubleArray): Projection {
         val cfRecurring = activeCashflow(recurringFlows, ageStart, deflT) // ongoing obligations (child, spouse spend, pension)
         val cfOneTime = activeCashflow(oneTimeFlows, ageStart, deflT)     // windfalls / one-off costs
         val cf = cfRecurring + cfOneTime
-        val contribution = incomeT - spendT + cf
+        // Coasting (Coast-FI probe): from coastFromAge you earn exactly your spending — the income-minus-
+        // spending term vanishes while event/property flows continue and the portfolio just compounds.
+        val coasting = inp.coastFromAge in 0..ageStart
+        val contribution = (if (coasting) 0.0 else incomeT - spendT) + cf
 
         var propOneTime = 0.0   // down payment / sale proceeds — capital moves, never tax-grossed
         var propRecurring = 0.0 // mortgage + upkeep − rent freed — the ongoing cost of owning
@@ -321,6 +324,7 @@ internal fun simulate(rawInp: FixedInputs, gByYear: DoubleArray): Projection {
         fireTarget = target,
         retirementEventCost = eventCost,
         retireSpend = retSpendBase,
+        fiProgress = if (target > 0.0) (liquid[0] / target).coerceIn(0.0, 1.0) else 1.0,
         savingsRate = sr,
         growthRate = if (gByYear.isEmpty()) 0.0 else gByYear.average(),
         yearsToFire = yearsToFire,

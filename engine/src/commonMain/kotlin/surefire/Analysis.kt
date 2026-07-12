@@ -15,6 +15,11 @@ class AnalysisResult(
     val recommendedRetireAge: Int, // earliest age clearing ~80% Monte Carlo survival
     val retireAge: Int,            // the age analyzed: the explicit input, else the recommendation
     val lifeSuccess: Double,       // survival to the death age retiring AT [retireAge] (full-run Monte Carlo)
+    // Coast FI: the earliest age you could stop saving entirely (earn just your spending until the retire
+    // age; the portfolio compounds untouched) and still clear ~80% survival. -1 = no coasting slack.
+    val coastAge: Int,
+    val p10DepletionAge: Int,      // the roughest-decile path's dry age; -1 = even it lasts to the death age
+    val p10FinalBalance: Double,   // the roughest-decile balance at death (0 when ≥10% of paths deplete)
     val affordability: Affordability,
     val insights: Insights,
 )
@@ -28,12 +33,27 @@ fun analysis(
     val rec = recommendedRetireAge(inp0)
     val eff = if (inp0.retireAge > 0) maxOf(inp0.currentAge, inp0.retireAge) else rec
     val inp = inp0.copy(retireAge = eff)
-    // Survival at the analyzed age uses the full run count — it's the headline "Survives" number, so it
-    // must agree with the Monte Carlo view; the searches inside affordability/insights keep the lean count.
-    val life = mcSurvival(inp, MonteCarloModel.RUNS)
+    // Survival + the roughest-decile outcome in ONE full-run pass — the headline "Survives" number, so it
+    // must agree with the Monte Carlo view; the searches below keep the lean run count.
+    val outcomes = lifeOutcomes(inp, MonteCarloModel.RUNS)
+    // Coast FI: survival is monotonic in the coast age (coasting later means strictly more saved), and
+    // coasting from the retire age itself is the unchanged plan — so a leftmost-true bisection is exact.
+    val coastAge = run {
+        fun ok(c: Int) = mcSurvival(inp.copy(coastFromAge = c), MonteCarloModel.RECOMMEND_RUNS) >= MonteCarloModel.RECOMMEND_SURVIVAL
+        if (eff <= inp0.currentAge || !ok(eff)) -1
+        else {
+            var lo = inp0.currentAge
+            var hi = eff
+            while (lo < hi) {
+                val mid = (lo + hi) / 2
+                if (ok(mid)) hi = mid else lo = mid + 1
+            }
+            lo
+        }
+    }
     val afford = affordability(
         inp, homeDownPct, homeMortgageRate, homeTermYears, homeAppreciation, homeOngoingPct, homeSellPct,
         childYears, childAnnualCost, childBirthCost, childCollegeCost,
     )
-    return AnalysisResult(rec, eff, life, afford, insights(inp))
+    return AnalysisResult(rec, eff, outcomes.survival, coastAge, outcomes.p10DepletionAge, outcomes.p10FinalBalance, afford, insights(inp))
 }

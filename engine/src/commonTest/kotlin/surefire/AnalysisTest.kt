@@ -46,6 +46,54 @@ class AnalysisTest {
     }
 
     @Test
+    fun coastingStopsContributionsButKeepsCompounding() {
+        // Coasting from today: no growth ⇒ the balance must stay EXACTLY flat (no contributions, no draw
+        // until retirement); with growth it must compound from the initial balance alone.
+        val flat = reference().copy(stockReturn = 0.0, bondReturn = 0.0, cashReturn = 0.0, coastFromAge = 32, retireAge = 60)
+        val p = projectFixed(flat)
+        for (t in 0..(60 - 32)) assertEquals(25_000.0, p.liquid[t], 1e-6, "coasting balance must stay flat at age ${32 + t}")
+        val growing = projectFixed(reference().copy(coastFromAge = 32, retireAge = 60))
+        assertTrue(growing.liquid[10] > 25_000.0, "with growth the coasting portfolio still compounds")
+        assertTrue(growing.liquid[10] < projectFixed(reference().copy(retireAge = 60)).liquid[10], "but below the keep-saving path")
+    }
+
+    @Test
+    fun coastAgeSitsExactlyOnTheSurvivalBoundary() {
+        val inp = reference().copy(retireAge = 62, socialSecurity = 24_000.0)
+        val r = run(inp)
+        assertTrue(r.coastAge in inp.currentAge..62, "expected a coast age within working life, got ${r.coastAge}")
+        val ok = { c: Int -> mcSurvival(inp.copy(coastFromAge = c), MonteCarloModel.RECOMMEND_RUNS) >= MonteCarloModel.RECOMMEND_SURVIVAL }
+        assertTrue(ok(r.coastAge), "coasting from the reported age must clear ~80%")
+        if (r.coastAge > inp.currentAge) assertTrue(!ok(r.coastAge - 1), "coasting a year earlier must miss it")
+    }
+
+    @Test
+    fun overfundedPlanCoastsTodayAndItsWorstDecileSurvives() {
+        val r = run(reference().copy(initialInvestments = 10_000_000.0, retireAge = 50))
+        assertEquals(reference().currentAge, r.coastAge, "a 10M portfolio can stop saving immediately")
+        assertEquals(-1, r.p10DepletionAge, "even the roughest decile must survive")
+        assertTrue(r.p10FinalBalance > 0.0, "and still leave money at the death age")
+    }
+
+    @Test
+    fun stretchedPlanReportsTheWorstDecileDryAge() {
+        // Retiring well before the recommendation ⇒ survival far below 90%, so the tenth-percentile path
+        // runs dry at a real age before the death age (and the p10 final balance is exactly 0).
+        val inp = reference().copy(retireAge = 45)
+        val r = run(inp)
+        assertTrue(r.lifeSuccess < 0.9, "premise: this plan must be risky, got ${r.lifeSuccess}")
+        assertTrue(r.p10DepletionAge in 45 until inp.lifeExpectancy, "expected a real dry age, got ${r.p10DepletionAge}")
+        assertEquals(0.0, r.p10FinalBalance, 1e-9)
+    }
+
+    @Test
+    fun fiProgressIsTodaysBalanceOverTheTarget() {
+        val p = projectFixed(reference())
+        assertEquals(25_000.0 / p.fireTarget, p.fiProgress, 1e-12)
+        assertEquals(1.0, projectFixed(reference().copy(initialInvestments = 10_000_000.0)).fiProgress, 1e-12) // clamped
+    }
+
+    @Test
     fun retireSpendResolvesTheFallbackHousingAware() {
         // No override, no home: retirement spending tracks total spending.
         val noHome = reference().copy(retirementSpending = 0.0, spending = 45_000.0, housing = 18_000.0)

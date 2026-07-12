@@ -58,6 +58,7 @@ export interface ProjView {
   fireTarget: number
   retirementEventCost: number
   retireSpend: number // resolved retirement spending (override, or total minus the rent a held home replaces)
+  fiProgress: number // today's liquid ÷ the FIRE target, clamped to [0,1]
   savingsRate: number
   yearsToFire: number
   ageAtFire: number
@@ -201,7 +202,7 @@ function toInputs(i: FireInputs): FireInputsJs {
 export function runFixed(i: FireInputs): ProjView {
   const r = projectFixedJs(toInputs(i))
   return {
-    fireTarget: r.fireTarget, retirementEventCost: r.retirementEventCost, retireSpend: r.retireSpend, savingsRate: r.savingsRate, yearsToFire: r.yearsToFire, ageAtFire: r.ageAtFire,
+    fireTarget: r.fireTarget, retirementEventCost: r.retirementEventCost, retireSpend: r.retireSpend, fiProgress: r.fiProgress, savingsRate: r.savingsRate, yearsToFire: r.yearsToFire, ageAtFire: r.ageAtFire,
     leanTarget: r.leanTarget, leanYears: r.leanYears, leanAge: r.leanAge, fatTarget: r.fatTarget, fatYears: r.fatYears, fatAge: r.fatAge,
     netWorthAtFire: r.netWorthAtFire, retireAge: r.retireAge, claimAge: r.claimAge, depletionAge: r.depletionAge, lifeLiquid: arr(r.lifeLiquid), lifeNetWorth: arr(r.lifeNetWorth),
     ages: arr(r.ages), liquid: arr(r.liquid), saved: arr(r.saved), returns: arr(r.returns), netWorth: arr(r.netWorth),
@@ -261,6 +262,9 @@ export interface AnalysisView {
   recommendedRetireAge: number // earliest age clearing ~80% Monte Carlo survival
   retireAge: number // the age analyzed: the explicit input, else the recommendation (auto-tracking)
   lifeSuccess: number // survival to the death age retiring AT `retireAge`
+  coastAge: number // earliest stop-saving age still clearing ~80% (Coast FI); -1 = no slack
+  p10DepletionAge: number // the roughest-decile path's dry age; -1 = even it lasts to the death age
+  p10FinalBalance: number // the roughest-decile balance at death (0 when ≥10% of paths deplete)
   affordability: AffordabilityView
   insights: InsightsView
 }
@@ -274,6 +278,7 @@ export function runAnalysis(i: FireInputs): AnalysisView {
   const s = r.insights
   return {
     recommendedRetireAge: r.recommendedRetireAge, retireAge: r.retireAge, lifeSuccess: r.lifeSuccess,
+    coastAge: r.coastAge, p10DepletionAge: r.p10DepletionAge, p10FinalBalance: r.p10FinalBalance,
     affordability: {
       survives: a.survives, extraSpend: a.extraSpend, extraSpendAtCap: a.extraSpendAtCap,
       homePrice: a.homePrice, homePriceAtCap: a.homePriceAtCap, kids: a.kids, kidsAtCap: a.kidsAtCap,

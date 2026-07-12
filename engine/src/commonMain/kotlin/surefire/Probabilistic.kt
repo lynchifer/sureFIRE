@@ -230,6 +230,42 @@ internal fun mcSurvival(inp: FixedInputs, runs: Int): Double = lifeSuccessRate(
     MonteCarloModel.CORRELATION, MonteCarloModel.NU, runs, MonteCarloModel.SEED,
 )
 
+/** Survival plus the worst-decile outcome of the retire-at-RE-age drawdown. */
+internal class LifeOutcomes(
+    val survival: Double,
+    val p10DepletionAge: Int,     // age the 10th-percentile (bad) path runs dry; -1 = even that path survives
+    val p10FinalBalance: Double,  // 10th-percentile balance at the death age (0 when ≥10% of paths deplete)
+)
+
+/** One Monte Carlo pass collecting survival AND the roughest-decile outcome — same model, seed, and
+ *  per-run sampling as [mcSurvival]/[monteCarlo], so the headline survival can never disagree with the
+ *  worst-case readout shown beside it. */
+internal fun lifeOutcomes(inp: FixedInputs, runs: Int): LifeOutcomes {
+    val n = horizonYears(inp)
+    val rng = Rng(MonteCarloModel.SEED)
+    val sampler = ReturnSampler(
+        inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
+        MonteCarloModel.CORRELATION, MonteCarloModel.NU, inp.stockPct, inp.bondPct, inp.cashPct, inp.cashReturn,
+    )
+    val g = DoubleArray(n)
+    val depl = IntArray(runs)
+    val fin = DoubleArray(runs)
+    var ok = 0
+    for (run in 0 until runs) {
+        for (t in 0 until n) g[t] = sampler.next(rng)
+        val p = simulate(inp, g)
+        val d = p.depletionAge
+        val survived = d < 0 || d >= inp.lifeExpectancy
+        if (survived) ok++
+        depl[run] = if (survived) Int.MAX_VALUE else d // survivors sort last (a later dry-age is better)
+        fin[run] = p.lifeLiquid[(inp.lifeExpectancy - inp.currentAge).coerceIn(0, p.lifeLiquid.size - 1)]
+    }
+    depl.sort()
+    fin.sort()
+    val d10 = depl[((runs - 1) * 0.10).toInt()]
+    return LifeOutcomes(ok.toDouble() / runs, if (d10 == Int.MAX_VALUE) -1 else d10, percentileSorted(fin, 0.10))
+}
+
 /**
  * Recommended "don't go broke" RE age = the EARLIEST age whose Monte Carlo drawdown survives to the
  * death age at least [threshold] of the time (default 80%). Risk-adjusted, unlike a deterministic

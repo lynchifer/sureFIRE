@@ -92,6 +92,10 @@ data class FixedInputs(
     val socialSecurityAge: Int = 67,     // age you claim Social Security (benefit begins); 62–70
     val retireAge: Int = -1,             // age earned income stops & drawdown begins; ≤0 ⇒ fall back to the claim age
     val withdrawalStrategy: WithdrawalStrategy = WithdrawalStrategy.FIXED, // how the retirement drawdown spends
+    // Coast-FI probe (engine-internal; the analysis search sets it via copy()): from this age until the
+    // retire age you earn exactly your spending — contributions stop, life-event and property flows
+    // continue, and the existing portfolio just compounds. < 0 = off (normal accumulation).
+    val coastFromAge: Int = -1,
 )
 
 /**
@@ -107,6 +111,7 @@ class Projection(
     val fireTarget: Double,
     val retirementEventCost: Double, // annual life-event cost active at retirement, folded into fireTarget
     val retireSpend: Double, // RESOLVED annual retirement spending: the explicit override, else total spending minus the rent slice a home held at retirement replaces. Display this — never re-derive the fallback UI-side.
+    val fiProgress: Double, // today's liquid ÷ the FIRE target, clamped to [0,1] — "how far along you already are"
     val savingsRate: Double,
     val growthRate: Double,
     val yearsToFire: Double,

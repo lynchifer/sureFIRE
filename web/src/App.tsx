@@ -564,7 +564,7 @@ export default function App() {
   const recRetire = analysisData.recommendedRetireAge
   const lifeSuccess = analysisData.lifeSuccess
   const insights = analysisData.insights
-  const analysis = analysisData.affordability.survives ? { ra: analysisData.retireAge, ...analysisData.affordability } : null
+  const analysis = analysisData.affordability.survives ? { ra: analysisData.retireAge, coastAge: analysisData.coastAge, ...analysisData.affordability } : null
   // "Retire at" auto-tracks the recommended age until the user overrides it (sets a concrete retireAge).
   const effInp = useMemo(() => (inp.retireAge == null ? { ...inp, retireAge: recRetire } : inp), [inp, recRetire])
   const proj = useMemo(() => runFixed(effInp), [effInp])
@@ -607,6 +607,10 @@ export default function App() {
   // so the whole Analysis section reads as one feature instead of chips-vs-rows.
   const roomRows = analysis
     ? [
+        // Coast FI first — the headline slack: the earliest you could stop saving entirely.
+        ...(analysis.coastAge >= 0 && analysis.coastAge < analysis.ra
+          ? [{ key: 'coast', icon: '🏖️', label: analysis.coastAge <= inp.currentAge ? `Stop saving today, coast to ${analysis.ra}` : `Stop saving at ${analysis.coastAge}, coast to ${analysis.ra}` }]
+          : []),
         ...(analysis.homePrice > 60_000 ? [{ key: 'home', icon: '🏠', label: `Buy a ${analysis.homePriceAtCap ? '≥' : ''}${usdShort(analysis.homePrice)} home` }] : []),
         ...(analysis.kids >= 1 ? [{ key: 'kids', icon: '👶', label: `Raise ${analysis.kids}${analysis.kidsAtCap ? '+' : ''} more kid${analysis.kids > 1 ? 's' : ''}` }] : []),
         ...(analysis.extraSpend > 1000 ? [{ key: 'spend', icon: '💸', label: `Spend ${analysis.extraSpendAtCap ? '≥' : ''}${usdShort(analysis.extraSpend)}/yr more` }] : []),
@@ -1043,7 +1047,7 @@ export default function App() {
                   {active?.name ?? 'Plan'}
                   {showMc ? <span className="font-normal text-neutral-500"> · Monte Carlo median</span> : ''}
                 </div>
-                <div className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium tabular-nums text-neutral-400">{pct(proj.savingsRate, 0)} saved</div>
+                <div className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium tabular-nums text-neutral-400">{pct(proj.savingsRate, 0)} saved · {pct(proj.fiProgress, 0)} to FI</div>
               </div>
 
               <div className="mt-5 flex items-baseline justify-between gap-2">
@@ -1113,6 +1117,9 @@ export default function App() {
                     ) : (
                       <span className="text-emerald-300"> Your age {proj.retireAge} clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
                     )}
+                    <span className="text-neutral-500">
+                      {' '}Roughest 10% of markets: {analysisData.p10DepletionAge >= 0 ? `dry by ${analysisData.p10DepletionAge}` : `${usdShort(analysisData.p10FinalBalance)} still left at ${inp.lifeExpectancy}`}.
+                    </span>
                   </p>
                   {analysis && roomRows.length > 0 && (
                     <div>
