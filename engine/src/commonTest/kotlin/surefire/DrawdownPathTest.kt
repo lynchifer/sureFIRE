@@ -116,4 +116,53 @@ class DrawdownPathTest {
         val p100 = projectFixed(reference().copy(lifeExpectancy = 100))
         assertEquals(p80.yearsToFire, p100.yearsToFire, 1e-9)
     }
+
+    @Test
+    fun horizonAlwaysReachesTheDeathAgeSoLateDepletionsAreCaught() {
+        // Age 20, death 105: maxYears 80 only covers to 100 — a plan that runs dry at ~101 must still be
+        // caught, not silently counted as surviving because the simulation stopped early.
+        val inp = reference().copy(
+            currentAge = 20, lifeExpectancy = 105, maxYears = 80, retireAge = 60, socialSecurity = 0.0,
+            income = 88_800.0, stockReturn = 0.0, bondReturn = 0.0, cashReturn = 0.0, incomeGrowth = 0.0,
+        )
+        val p = projectFixed(inp)
+        assertEquals(105 - 20, p.ages.size - 1, "the series must extend to the death age")
+        // 25k + 40yr × 43.8k savings = 1.777M at 60; drawing 40k × 1.07 = 42.8k/yr ⇒ dry in year 101 —
+        // past the 80-year (age-100) window, so a maxYears-truncated horizon would have missed it.
+        assertTrue(p.depletionAge in 101..104, "the late depletion must be detected, got ${p.depletionAge}")
+    }
+
+    // A fully-paid home (100% down, no upkeep/appreciation/mortgage) whose ONLY spending effect is the
+    // rent suppression, so the retirement draw's housing-awareness is isolated cleanly.
+    private fun paidOffHome(buyAge: Int, sellAge: Int?) = Presets.homeProperty(
+        buyAge, 400_000.0, 1.0, 0.0, 30, 0.0, 0.0, 0.0, sellAge,
+    )
+
+    @Test
+    fun rentResumesWhenAHomeIsSoldDuringRetirement() {
+        // Retired at 60 tracking current spending (45k incl. 18k rent); home held since 40, sold at 75.
+        // While held the draw funds spending MINUS rent; after the sale you rent again, so the draw must
+        // rise back to full spending × the tax gross-up (1.07 in parity mode) — not stay suppressed forever.
+        val inp = reference().copy(
+            retireAge = 60, income = 200_000.0, retirementSpending = 0.0, housing = 18_000.0,
+            properties = listOf(paidOffHome(buyAge = 40, sellAge = 75)),
+        )
+        val p = projectFixed(inp)
+        assertEquals((45_000.0 - 18_000.0) * 1.07, p.lifeSpending[70 - inp.currentAge], 1.0) // owned: rent-free
+        assertEquals(45_000.0 * 1.07, p.lifeSpending[80 - inp.currentAge], 1.0) // sold: paying rent again
+    }
+
+    @Test
+    fun rentStopsWhenAHomeIsBoughtDuringRetirement() {
+        // Retired at 60, buy at 70: before the purchase you rent (full spending); after it the rent slice
+        // is replaced by the home's own carrying costs (which flow separately as property flows) — the
+        // draw must NOT keep charging rent on top of them.
+        val inp = reference().copy(
+            retireAge = 60, income = 200_000.0, retirementSpending = 0.0, housing = 18_000.0,
+            properties = listOf(paidOffHome(buyAge = 70, sellAge = null)),
+        )
+        val p = projectFixed(inp)
+        assertEquals(45_000.0 * 1.07, p.lifeSpending[65 - inp.currentAge], 1.0) // renting before the buy
+        assertEquals((45_000.0 - 18_000.0) * 1.07, p.lifeSpending[75 - inp.currentAge], 1.0) // owned after
+    }
 }

@@ -34,12 +34,12 @@ internal class DrawResult(val portfolio: Double, val spend: Double)
 
 /**
  * Stateful per-path withdrawal calculator (guardrails carry state across years, so use one instance per
- * simulated life/path). Social Security ([ssNow]) is supplied PER YEAR — it is 0 during an early-
- * retirement bridge (before the claim age) and the full benefit once claiming begins.
+ * simulated life/path). Social Security ([ssNow]) and the grossed-up spending need ([grossSpendNow]) are
+ * supplied PER YEAR: ssNow is 0 during an early-retirement bridge and the benefit once claiming begins;
+ * grossSpendNow tracks housing transitions (rent resumes when a home is sold, stops when one is bought).
  */
 internal class WithdrawalPlan(
     private val strategy: WithdrawalStrategy,
-    private val grossSpend: Double,      // grossed-up real spending target (FIXED holds this constant)
     private val initialBalance: Double,  // portfolio at retirement (drives the GK starting draw)
     private val assumedReturn: Double,   // VPW's PMT discount rate (the plan's expected real return)
     private val lifeExpectancy: Int,
@@ -51,9 +51,9 @@ internal class WithdrawalPlan(
     // meaningful share of their wealth (e.g. 3.7% of $50M ≈ $1.85M), not their tiny stated spending need.
     private var gkDraw = withdrawalRate * initialBalance
 
-    fun draw(age: Int, balance: Double, ssNow: Double): DrawResult = when (strategy) {
-        // FIXED: spend a constant real amount; Social Security covers part, the portfolio funds the rest.
-        WithdrawalStrategy.FIXED -> DrawResult(portfolio = grossSpend - ssNow, spend = grossSpend)
+    fun draw(age: Int, balance: Double, ssNow: Double, grossSpendNow: Double): DrawResult = when (strategy) {
+        // FIXED: spend the (housing-aware) real amount; Social Security covers part, the portfolio the rest.
+        WithdrawalStrategy.FIXED -> DrawResult(portfolio = grossSpendNow - ssNow, spend = grossSpendNow)
         WithdrawalStrategy.VPW -> {
             val yearsLeft = (lifeExpectancy - age).coerceAtLeast(1)
             val d = pmt(assumedReturn, yearsLeft, balance).coerceIn(0.0, balance.coerceAtLeast(0.0))

@@ -135,7 +135,7 @@ fun monteCarlo(
     runs: Int,
     seed: Int,
 ): MonteCarloResult {
-    val n = inp.maxYears
+    val n = horizonYears(inp)
     val rng = Rng(seed)
     val sampler = ReturnSampler(mcStockReturn, mcBondReturn, stockSd, bondSd, correlation, nu, inp.stockPct, inp.bondPct, inp.cashPct, inp.cashReturn)
 
@@ -210,7 +210,7 @@ internal fun lifeSuccessRate(
     inp: FixedInputs, mcStockReturn: Double, mcBondReturn: Double, stockSd: Double, bondSd: Double,
     correlation: Double, nu: Int, runs: Int, seed: Int,
 ): Double {
-    val n = inp.maxYears
+    val n = horizonYears(inp)
     val rng = Rng(seed)
     val sampler = ReturnSampler(mcStockReturn, mcBondReturn, stockSd, bondSd, correlation, nu, inp.stockPct, inp.bondPct, inp.cashPct, inp.cashReturn)
     val g = DoubleArray(n)
@@ -223,6 +223,13 @@ internal fun lifeSuccessRate(
     return ok.toDouble() / runs
 }
 
+/** Monte Carlo survival at the engine's locked model parameters — the ONE way every search (recommended
+ *  age, affordability, insights, analysis) measures survival, so they can never drift apart. */
+internal fun mcSurvival(inp: FixedInputs, runs: Int): Double = lifeSuccessRate(
+    inp, inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
+    MonteCarloModel.CORRELATION, MonteCarloModel.NU, runs, MonteCarloModel.SEED,
+)
+
 /**
  * Recommended "don't go broke" RE age = the EARLIEST age whose Monte Carlo drawdown survives to the
  * death age at least [threshold] of the time (default 80%). Risk-adjusted, unlike a deterministic
@@ -231,10 +238,8 @@ internal fun lifeSuccessRate(
  * survives — so a binary search for the leftmost passing age is exact and runs ~log2(years) simulations.
  */
 fun recommendedRetireAge(inp: FixedInputs, threshold: Double = MonteCarloModel.RECOMMEND_SURVIVAL): Int {
-    fun survives(age: Int): Boolean = lifeSuccessRate(
-        inp.copy(retireAge = age), inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
-        MonteCarloModel.CORRELATION, MonteCarloModel.NU, MonteCarloModel.RECOMMEND_RUNS, MonteCarloModel.SEED,
-    ) >= threshold
+    fun survives(age: Int): Boolean =
+        mcSurvival(inp.copy(retireAge = age), MonteCarloModel.RECOMMEND_RUNS) >= threshold
     var lo = inp.currentAge
     var hi = maxOf(inp.currentAge, inp.lifeExpectancy) // retiring at/after death has no drawdown ⇒ always survives
     while (lo < hi) {
@@ -280,10 +285,7 @@ fun affordability(
     threshold: Double = MonteCarloModel.RECOMMEND_SURVIVAL,
     runs: Int = MonteCarloModel.RECOMMEND_RUNS,
 ): Affordability {
-    fun survives(i: FixedInputs): Boolean = lifeSuccessRate(
-        i, i.stockReturn, i.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
-        MonteCarloModel.CORRELATION, MonteCarloModel.NU, runs, MonteCarloModel.SEED,
-    ) >= threshold
+    fun survives(i: FixedInputs): Boolean = mcSurvival(i, runs) >= threshold
 
     // Already stretched at this retire age ⇒ nothing to spare on any lever.
     if (!survives(inp)) return Affordability(false, 0.0, false, -1.0, false, 0, false)

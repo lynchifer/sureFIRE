@@ -3,6 +3,13 @@ package surefire
 import kotlin.math.floor
 import kotlin.math.pow
 
+/**
+ * Simulation horizon in years. At least [FixedInputs.maxYears], but always reaching the death age: a
+ * drawdown truncated before lifeExpectancy would let a depletion in the untracked tail silently count
+ * as survival (e.g. age 20, death 105, maxYears 80). Every gByYear allocation must use this too.
+ */
+internal fun horizonYears(inp: FixedInputs): Int = maxOf(inp.maxYears, inp.lifeExpectancy - inp.currentAge)
+
 /** Blended real return from the asset allocation. */
 fun weightedGrowthRate(
     stockPct: Double,
@@ -94,6 +101,10 @@ internal fun crossYears(liquid: DoubleArray, currentAge: Int, target: Double): P
  * the nest egg must also fund, folded into the FIRE target. One-time flows (down payments, sales,
  * lump sums) are excluded; only ongoing obligations count. Sign: positive = net cost, negative = net
  * income (e.g. a pension event lowers the target).
+ *
+ * Deliberately capitalizes each obligation as PERPETUAL (÷ withdrawal rate via the target) even when it
+ * ends mid-retirement (a mortgage's last years, a child's remaining years) — a conservative target-side
+ * simplification; the drawdown path spends the true declining flows, so success/depletion stays exact.
  */
 internal fun retirementEventCost(inp: FixedInputs, retireAge: Int): Double {
     val defl = (1.0 + inp.inflation).pow((retireAge - inp.currentAge).toDouble())
@@ -134,18 +145,17 @@ internal fun simulate(rawInp: FixedInputs, gByYear: DoubleArray): Projection {
     val ssBenefit = Finance.socialSecurityBenefit(inp.socialSecurity, inp.socialSecurityAge) // claim-age-adjusted
     // Retirement-spending anchor: an explicit override (retirementSpending > 0) is used verbatim; otherwise
     // track total spending, minus the housing slice if a home is held at retirement (you own it, not rent).
+    // Deliberately TODAY'S spending level — lifestyle creep raises spending only during accumulation (the
+    // contract is "you retire back to today's lifestyle"); set the override to model a creeped-up level.
     val retSpendBase = if (inp.retirementSpending > 0.0) inp.retirementSpending
         else (inp.spending - if (homeHeldAt(inp.properties, effectiveRetireAge)) inp.housing else 0.0).coerceAtLeast(0.0)
-    // The FIRE target folds in life-event costs still active at retirement; the drawdown handles the actual
-    // (declining) event flows via `cf`, so `grossSpend` stays on BASE spending to avoid double-counting.
-    val grossSpend = Finance.fireTarget(retSpendBase, inp.withdrawalRate, inp.taxRate, inp.correctTax) * inp.withdrawalRate
     val eventCost = retirementEventCost(inp, effectiveRetireAge)
     val target = Finance.fireTarget((retSpendBase + eventCost).coerceAtLeast(0.0), inp.withdrawalRate, inp.taxRate, inp.correctTax)
     val assumedReturn = weightedGrowthRate(inp.stockPct, inp.bondPct, inp.cashPct, inp.stockReturn, inp.bondReturn, inp.cashReturn) // VPW's expected real return
     var plan: WithdrawalPlan? = null // built lazily at retirement so it sees the actual starting balance
     var depletionAge = -1 // first age the retired balance hits 0 (-1 = never)
     val sr = Finance.savingsRate(inp.income, inp.spending)
-    val n = inp.maxYears
+    val n = horizonYears(inp)
     val inf = inp.inflation
     // In retirement the portfolio funds recurring obligations out of taxable withdrawals, so they're tax-
     // grossed exactly like base spending and the FIRE target ([retirementEventCost]). One-time flows (down
@@ -269,9 +279,17 @@ internal fun simulate(rawInp: FixedInputs, gByYear: DoubleArray): Projection {
         val lifeContribution: Double
         val lifePropFlow: Double
         if (retiredNow) {
-            val p = plan ?: WithdrawalPlan(inp.withdrawalStrategy, grossSpend, lifeLiquid[t], assumedReturn, inp.lifeExpectancy, inp.withdrawalRate).also { plan = it }
+            val p = plan ?: WithdrawalPlan(inp.withdrawalStrategy, lifeLiquid[t], assumedReturn, inp.lifeExpectancy, inp.withdrawalRate).also { plan = it }
             val ssNow = if (ageStart >= ssClaimAge) ssBenefit else 0.0 // 0 during the bridge, then the benefit
-            val d = p.draw(ageStart, lifeLiquid[t], ssNow) // portfolio draw + total spend per the chosen strategy
+            // The year's spending need, tax-grossed. An explicit override is verbatim; otherwise it tracks
+            // total spending minus THIS year's held-home rent suppression (housingNow) — so rent correctly
+            // resumes after an in-retirement sale and stops after an in-retirement purchase. The FIRE
+            // target's [retSpendBase] intentionally stays anchored at the retirement-day status; the life
+            // path handles the actual transitions. Life-event flows stay out of the base spend (handled
+            // via `cf` below) to avoid double-counting, mirroring the target's construction.
+            val retSpendNow = if (inp.retirementSpending > 0.0) inp.retirementSpending
+                else (inp.spending - housingNow).coerceAtLeast(0.0)
+            val d = p.draw(ageStart, lifeLiquid[t], ssNow, retSpendNow * retireGross) // draw + total spend per the strategy
             // Recurring obligations are funded by taxable withdrawals ⇒ tax-grossed (like base spend + the
             // FIRE target); one-time capital flows pass through raw. Keeps the path consistent with the target.
             lifeContribution = cfOneTime + cfRecurring * retireGross - d.portfolio
@@ -337,5 +355,5 @@ internal fun simulate(rawInp: FixedInputs, gByYear: DoubleArray): Projection {
 /** Deterministic fixed-return projection: a constant real growth path. */
 fun projectFixed(inp: FixedInputs): Projection {
     val g = weightedGrowthRate(inp.stockPct, inp.bondPct, inp.cashPct, inp.stockReturn, inp.bondReturn, inp.cashReturn)
-    return simulate(inp, DoubleArray(inp.maxYears) { g })
+    return simulate(inp, DoubleArray(horizonYears(inp)) { g })
 }

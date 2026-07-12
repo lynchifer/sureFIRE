@@ -30,10 +30,7 @@ fun analysis(
     val inp = inp0.copy(retireAge = eff)
     // Survival at the analyzed age uses the full run count — it's the headline "Survives" number, so it
     // must agree with the Monte Carlo view; the searches inside affordability/insights keep the lean count.
-    val life = lifeSuccessRate(
-        inp, inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
-        MonteCarloModel.CORRELATION, MonteCarloModel.NU, MonteCarloModel.RUNS, MonteCarloModel.SEED,
-    )
+    val life = mcSurvival(inp, MonteCarloModel.RUNS)
     val afford = affordability(
         inp, homeDownPct, homeMortgageRate, homeTermYears, homeAppreciation, homeOngoingPct, homeSellPct,
         childYears, childAnnualCost, childBirthCost, childCollegeCost,

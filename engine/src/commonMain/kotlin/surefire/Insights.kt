@@ -44,10 +44,7 @@ fun insights(inp0: FixedInputs, runs: Int = MonteCarloModel.RECOMMEND_RUNS): Ins
     val inp = inp0.copy(retireAge = effRet)
 
     fun fiYears(i: FixedInputs): Double = projectFixed(i).yearsToFire
-    fun surv(i: FixedInputs): Double = lifeSuccessRate(
-        i, i.stockReturn, i.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
-        MonteCarloModel.CORRELATION, MonteCarloModel.NU, runs, MonteCarloModel.SEED,
-    )
+    fun surv(i: FixedInputs): Double = mcSurvival(i, runs)
 
     val baseFi = fiYears(inp)
     val baseSurv = surv(inp)
