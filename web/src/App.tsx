@@ -261,6 +261,26 @@ function Slider({ label, value, min, max, onChange, help, format }: { label: str
   )
 }
 
+/** One Analysis row — the section's single grammar: `icon + phrase → right-aligned consequence`.
+ *  Rows with an [apply] are one-tap actionable (dotted underline); labels wrap, hanging under the text. */
+function AnalysisRow({ icon, label, effect, effectClass, apply }: { icon: string; label: string; effect: string; effectClass: string; apply?: () => void }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-xs">
+      <span className="flex min-w-0 items-baseline gap-1.5 text-neutral-400">
+        <span className="shrink-0">{icon}</span>
+        {apply ? (
+          <button type="button" onClick={apply} className="text-left text-neutral-300 underline decoration-dotted decoration-neutral-600 underline-offset-2 hover:text-emerald-300" title="Apply to your plan">
+            {label}
+          </button>
+        ) : (
+          <span>{label}</span>
+        )}
+      </span>
+      <span className={`shrink-0 tabular-nums ${effectClass}`}>{effect}</span>
+    </div>
+  )
+}
+
 /** A compact labelled figure used in the hero's supporting-stats row (lighter than a tier card).
  *  [tone] optionally colors the value (e.g. a risk-graded survival rate). */
 function Stat({ label, value, hint, tone = 'text-neutral-50' }: { label: string; value: string; hint?: string; tone?: string }) {
@@ -583,6 +603,15 @@ export default function App() {
     ret.sort((a, b) => b.score - a.score)
     return [...acc, ...ret].slice(0, 5)
   })()
+  // Affordability headroom as rows in the SAME grammar as the levers (icon + phrase → consequence),
+  // so the whole Analysis section reads as one feature instead of chips-vs-rows.
+  const roomRows = analysis
+    ? [
+        ...(analysis.homePrice > 60_000 ? [{ key: 'home', icon: '🏠', label: `Buy a ${analysis.homePriceAtCap ? '≥' : ''}${usdShort(analysis.homePrice)} home` }] : []),
+        ...(analysis.kids >= 1 ? [{ key: 'kids', icon: '👶', label: `Raise ${analysis.kids}${analysis.kidsAtCap ? '+' : ''} more kid${analysis.kids > 1 ? 's' : ''}` }] : []),
+        ...(analysis.extraSpend > 1000 ? [{ key: 'spend', icon: '💸', label: `Spend ${analysis.extraSpendAtCap ? '≥' : ''}${usdShort(analysis.extraSpend)}/yr more` }] : []),
+      ]
+    : []
   const eventColors = inp.lifeEvents.map((_, i) => EVENT_COLORS[i % EVENT_COLORS.length])
   // Life-event FIRE-date impacts, one engine call against effInp: per-event MARGINALS (each badge moves
   // as other events come and go, and as the retire age changes) + the joint net for the panel header.
@@ -1085,54 +1114,22 @@ export default function App() {
                       <span className="text-emerald-300"> Your age {proj.retireAge} clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
                     )}
                   </p>
-                  {analysis && (analysis.extraSpend > 1000 || analysis.homePrice > 60_000 || analysis.kids >= 1) && (
+                  {analysis && roomRows.length > 0 && (
                     <div>
-                      <p className="text-[11px] leading-relaxed text-neutral-500">
-                        Retiring at <span className="text-neutral-300">{analysis.ra}</span>, you'd still stay ~80% safe while adding <span className="text-neutral-600">(each on its own, holding the rest)</span>…
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {analysis.homePrice > 60_000 && (
-                          <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
-                            <span className="text-sm">🏠</span>
-                            <span className="text-sm font-semibold text-neutral-100">{analysis.homePriceAtCap ? '≥' : ''}{usdShort(analysis.homePrice)}</span>
-                            <span className="text-[11px] text-neutral-500">home</span>
-                          </span>
-                        )}
-                        {analysis.kids >= 1 && (
-                          <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
-                            <span className="text-sm">👶</span>
-                            <span className="text-sm font-semibold text-neutral-100">{analysis.kids}{analysis.kidsAtCap ? '+' : ''}</span>
-                            <span className="text-[11px] text-neutral-500">more kid{analysis.kids > 1 ? 's' : ''}</span>
-                          </span>
-                        )}
-                        {analysis.extraSpend > 1000 && (
-                          <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
-                            <span className="text-sm">💸</span>
-                            <span className="text-sm font-semibold text-neutral-100">{analysis.extraSpendAtCap ? '≥' : '+'}{usdShort(analysis.extraSpend)}/yr</span>
-                            <span className="text-[11px] text-neutral-500">spending</span>
-                          </span>
-                        )}
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">Room to spare at {analysis.ra} · one at a time</p>
+                      <div className="mt-2 space-y-2">
+                        {roomRows.map((r) => (
+                          <AnalysisRow key={r.key} icon={r.icon} label={r.label} effect="still ~80% safe" effectClass="text-neutral-500" />
+                        ))}
                       </div>
                     </div>
                   )}
                   {levers.length > 0 && (
                     <div>
-                      <p className="text-[11px] leading-relaxed text-neutral-500">Biggest levers from here…</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">Biggest levers</p>
                       <div className="mt-2 space-y-2">
                         {levers.map((l) => (
-                          <div key={l.key} className="flex items-baseline justify-between gap-3 text-xs">
-                            <span className="flex min-w-0 items-baseline gap-1.5 text-neutral-400">
-                              <span className="shrink-0">{l.icon}</span>
-                              {l.apply ? (
-                                <button type="button" onClick={l.apply} className="text-left text-neutral-300 underline decoration-dotted decoration-neutral-600 underline-offset-2 hover:text-emerald-300" title="Apply to your plan">
-                                  {l.label}
-                                </button>
-                              ) : (
-                                <span>{l.label}</span>
-                              )}
-                            </span>
-                            <span className="shrink-0 font-semibold tabular-nums text-emerald-300">{l.effect}</span>
-                          </div>
+                          <AnalysisRow key={l.key} icon={l.icon} label={l.label} effect={l.effect} effectClass="font-semibold text-emerald-300" apply={l.apply} />
                         ))}
                       </div>
                     </div>
