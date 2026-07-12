@@ -571,7 +571,7 @@ export default function App() {
     const acc: LeverRow[] = []
     const ret: LeverRow[] = []
     if (insights.spendLessFiYears >= 0.15)
-      acc.push({ key: 'spend', icon: '✂️', label: `Spend ${usdShort(insights.spendNudge / 12)}/mo less`, effect: fi(insights.spendLessFiYears), score: insights.spendLessFiYears })
+      acc.push({ key: 'spend', icon: '✂️', label: `Spend ${usdShort(insights.spendNudge / 12)}/mo less, permanently`, effect: fi(insights.spendLessFiYears), score: insights.spendLessFiYears })
     if (insights.earnMoreFiYears >= 0.15)
       acc.push({ key: 'earn', icon: '💼', label: `Earn ${usdShort(insights.incomeNudge)}/yr more`, effect: fi(insights.earnMoreFiYears), score: insights.earnMoreFiYears })
     if (insights.noCreepFiYears >= 0.15)
@@ -597,7 +597,7 @@ export default function App() {
         }),
       })
     if (insights.guardrailsSurvival >= 0.015)
-      ret.push({ key: 'guardrails', icon: '🚧', label: 'Guardrails withdrawals', effect: pts(insights.guardrailsSurvival), score: insights.guardrailsSurvival, apply: () => set('withdrawalStrategy', 'guardrails') })
+      ret.push({ key: 'guardrails', icon: '🚧', label: 'Flexible spending — trim 10% in downturns', effect: pts(insights.guardrailsSurvival), score: insights.guardrailsSurvival, apply: () => set('withdrawalStrategy', 'guardrails') })
     acc.sort((a, b) => b.score - a.score)
     ret.sort((a, b) => b.score - a.score)
     return [...acc, ...ret].slice(0, 5)
