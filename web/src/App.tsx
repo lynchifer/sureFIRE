@@ -607,10 +607,6 @@ export default function App() {
   // so the whole Analysis section reads as one feature instead of chips-vs-rows.
   const roomRows = analysis
     ? [
-        // Coast FI first — the headline slack: the earliest you could stop saving entirely.
-        ...(analysis.coastAge >= 0 && analysis.coastAge < analysis.ra
-          ? [{ key: 'coast', icon: '🏖️', label: analysis.coastAge <= inp.currentAge ? 'Save $0 from today — work just covers bills' : `Save $0 from ${analysis.coastAge} — work just covers bills` }]
-          : []),
         ...(analysis.homePrice > 60_000 ? [{ key: 'home', icon: '🏠', label: `Buy a ${analysis.homePriceAtCap ? '≥' : ''}${usdShort(analysis.homePrice)} home` }] : []),
         ...(analysis.kids >= 1 ? [{ key: 'kids', icon: '👶', label: `Raise ${analysis.kids}${analysis.kidsAtCap ? '+' : ''} more kid${analysis.kids > 1 ? 's' : ''}` }] : []),
         ...(analysis.extraSpend > 1000 ? [{ key: 'spend', icon: '💸', label: `Spend ${analysis.extraSpendAtCap ? '≥' : ''}${usdShort(analysis.extraSpend)}/yr more` }] : []),
@@ -1082,6 +1078,20 @@ export default function App() {
                 })}
               </div>
               <div className="mt-3 h-1 rounded-full bg-gradient-to-r from-[#f87171]/50 via-[#fbbf24]/50 to-[#34d399]/50" />
+              {analysis && analysis.coastAge >= 0 && analysis.coastAge < analysis.ra && (
+                <p className="mt-2.5 text-[11px] leading-relaxed text-neutral-500">
+                  🏖️{' '}
+                  {analysis.coastAge <= inp.currentAge ? (
+                    <>
+                      <span className="font-semibold text-neutral-300">You're past Coast FI</span> — save $0 from today (work just covers bills) and retiring at {analysis.ra} stays ~80% safe.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-neutral-300">Coast FI at {analysis.coastAge}</span> — save $0 after that (work just covers bills) and retiring at {analysis.ra} stays ~80% safe.
+                    </>
+                  )}
+                </p>
+              )}
 
               <div className="mt-4 border-t border-white/[0.06] pt-4">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">In retirement</div>
