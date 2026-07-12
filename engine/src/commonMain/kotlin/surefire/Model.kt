@@ -106,6 +106,7 @@ data class FixedInputs(
 class Projection(
     val fireTarget: Double,
     val retirementEventCost: Double, // annual life-event cost active at retirement, folded into fireTarget
+    val retireSpend: Double, // RESOLVED annual retirement spending: the explicit override, else total spending minus the rent slice a home held at retirement replaces. Display this — never re-derive the fallback UI-side.
     val savingsRate: Double,
     val growthRate: Double,
     val yearsToFire: Double,

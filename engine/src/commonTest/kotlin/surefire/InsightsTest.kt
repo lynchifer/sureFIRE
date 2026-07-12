@@ -67,5 +67,9 @@ class InsightsTest {
         val r = insights(reference().copy(stockPct = 1.0, bondPct = 0.0, cashPct = 0.0, retireAge = 55))
         assertTrue(!r.allocShiftToStocks, "100% stocks ⇒ the only direction is toward bonds")
         assertTrue(!r.allocShiftSurvival.isNaN(), "the toward-bonds direction must be evaluated")
+        // The post-shift allocation is returned ready to apply — 10 pts drained from stocks into bonds.
+        assertEquals(0.9, r.allocStockPct, 1e-12)
+        assertEquals(0.1, r.allocBondPct, 1e-12)
+        assertEquals(0.0, r.allocCashPct, 1e-12)
     }
 }

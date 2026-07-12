@@ -302,6 +302,7 @@ internal fun simulate(rawInp: FixedInputs, gByYear: DoubleArray): Projection {
     return Projection(
         fireTarget = target,
         retirementEventCost = eventCost,
+        retireSpend = retSpendBase,
         savingsRate = sr,
         growthRate = if (gByYear.isEmpty()) 0.0 else gByYear.average(),
         yearsToFire = yearsToFire,

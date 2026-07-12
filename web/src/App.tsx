@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
-import { runFixed, runMonteCarlo, runLifeSuccess, recommendedRetireAge, runImpacts, runAffordability, runInsights, socialSecurityBenefit, totalSpending, DEFAULTS } from './engine'
+import { runFixed, runMonteCarlo, runAnalysis, runImpacts, socialSecurityBenefit, totalSpending, DEFAULTS } from './engine'
 import type { FireInputs, ProjView } from './engine'
 import Chart from './Chart'
 import type { EChartsOption } from 'echarts'
@@ -537,31 +537,20 @@ export default function App() {
     const t = setTimeout(() => setMcInp(inp), 150)
     return () => clearTimeout(t)
   }, [inp])
-  // The recommended "don't go broke" RE age: the earliest age whose Monte Carlo drawdown clears ~80%
-  // survival (risk-adjusted in the engine — so it IS the safe age, no separate reality-check needed).
-  const recRetire = useMemo(() => recommendedRetireAge(mcInp), [mcInp])
+  // The WHOLE analysis story in one engine call on the debounced input: recommended RE age, the resolved
+  // (auto-or-overridden) retire age, survival odds at it, affordability headroom, and biggest-lever
+  // insights — computed together at the same risk-adjusted footing, so the pieces can never disagree.
+  const analysisData = useMemo(() => runAnalysis(mcInp), [mcInp])
+  const recRetire = analysisData.recommendedRetireAge
+  const lifeSuccess = analysisData.lifeSuccess
+  const insights = analysisData.insights
+  const analysis = analysisData.affordability.survives ? { ra: analysisData.retireAge, ...analysisData.affordability } : null
   // "Retire at" auto-tracks the recommended age until the user overrides it (sets a concrete retireAge).
   const effInp = useMemo(() => (inp.retireAge == null ? { ...inp, retireAge: recRetire } : inp), [inp, recRetire])
   const proj = useMemo(() => runFixed(effInp), [effInp])
   // Compare-only: don't re-project every saved plan on each keystroke while the overlay is hidden.
   const allProj = useMemo(() => (compare ? plans.map((p) => ({ plan: p, proj: runFixed(p.inputs) })) : []), [plans, compare])
   const mc = useMemo(() => (mode === 'mc' && !compare ? runMonteCarlo(effInp) : null), [effInp, mode, compare])
-  // Probability the plan lasts if you retire AT the effective RE age (reuse the MC-mode result when shown,
-  // else run the life-path MC). runLifeSuccess returns 1 when there's no drawdown (retire at/after death).
-  const lifeSuccess = useMemo(() => (mc ? mc.lifeSuccessRate : runLifeSuccess(inp.retireAge == null ? { ...mcInp, retireAge: recRetire } : mcInp)), [mc, mcInp, recRetire, inp.retireAge])
-  // "What else could this plan afford?" — the most of each single lever (extra spend, a home, more kids)
-  // the plan sustains at the SAME ~80% Monte Carlo survival bar as the recommended age, so the headroom is
-  // consistent with the rest of the card. All the binary-searching lives in the engine; runs off the
-  // debounced input, evaluated at the effective (recommended-or-overridden) retire age.
-  const analysis = useMemo(() => {
-    const base = inp.retireAge == null ? { ...mcInp, retireAge: recRetire } : mcInp
-    const a = runAffordability(base)
-    return a.survives ? { ra: base.retireAge ?? recRetire, ...a } : null
-  }, [mcInp, recRetire, inp.retireAge])
-  // "Biggest levers" — the marginal effect of small concrete actions, computed in the engine on the
-  // honest metric per lever: cashflow nudges as deterministic Δ FI years, risk-shaping nudges as
-  // Δ Monte Carlo survival at the same retire age (so "more stocks" can't free-ride on steady returns).
-  const insights = useMemo(() => runInsights(inp.retireAge == null ? { ...mcInp, retireAge: recRetire } : mcInp), [mcInp, recRetire, inp.retireAge])
   // Rank the levers into display rows (accumulation first, then retirement, each by effect; NaN and
   // negligible effects drop out via the >= gates). Plain per-render build — the math is in the memo.
   type LeverRow = { key: string; icon: string; label: string; effect: string; score: number; apply?: () => void }
@@ -585,16 +574,8 @@ export default function App() {
         key: 'alloc', icon: insights.allocShiftToStocks ? '📈' : '⚖️',
         label: `Shift ${Math.round(insights.allocShift * 100)} pts into ${insights.allocShiftToStocks ? 'stocks' : 'bonds'}`,
         effect: pts(insights.allocShiftSurvival), score: insights.allocShiftSurvival,
-        // Mirror the engine's shift rule: toward stocks drains bonds first then cash; toward bonds drains stocks.
-        apply: () => updateInputs((i) => {
-          if (insights.allocShiftToStocks) {
-            const take = Math.min(insights.allocShift, i.bondPct + i.cashPct)
-            const fromBonds = Math.min(take, i.bondPct)
-            return { ...i, stockPct: round2(i.stockPct + take), bondPct: round2(i.bondPct - fromBonds), cashPct: round2(i.cashPct - (take - fromBonds)) }
-          }
-          const take = Math.min(insights.allocShift, i.stockPct)
-          return { ...i, stockPct: round2(i.stockPct - take), bondPct: round2(i.bondPct + take) }
-        }),
+        // The engine returns the post-shift allocation — apply it verbatim (round only to shed float dust).
+        apply: () => updateInputs((i) => ({ ...i, stockPct: round2(insights.allocStockPct), bondPct: round2(insights.allocBondPct), cashPct: round2(insights.allocCashPct) })),
       })
     if (insights.guardrailsSurvival >= 0.015)
       ret.push({ key: 'guardrails', icon: '🚧', label: 'Flexible spending — trim 10% in downturns', effect: pts(insights.guardrailsSurvival), score: insights.guardrailsSurvival, apply: () => set('withdrawalStrategy', 'guardrails') })
@@ -603,21 +584,9 @@ export default function App() {
     return [...acc, ...ret].slice(0, 5)
   })()
   const eventColors = inp.lifeEvents.map((_, i) => EVENT_COLORS[i % EVENT_COLORS.length])
-  // Per-event MARGINAL FIRE-date impact (this event's effect given the rest of the plan) — computed in
-  // the engine against effInp, so each badge moves as you add/remove events AND as the retire age changes.
+  // Life-event FIRE-date impacts, one engine call against effInp: per-event MARGINALS (each badge moves
+  // as other events come and go, and as the retire age changes) + the joint net for the panel header.
   const eventImpacts = useMemo(() => runImpacts(effInp), [effInp])
-  // Joint effect of ALL enabled events on the FI date (vs. a no-events projection) — the holistic
-  // readout for the panel header; the per-event badges above are marginal, this is the sum story.
-  const netEventImpact = useMemo(() => {
-    if (!inp.lifeEvents.some(isEnabled)) return NaN
-    const bare = runFixed({ ...effInp, lifeEvents: [] })
-    const w = proj.yearsToFire
-    const wo = bare.yearsToFire
-    if (Number.isFinite(w) && Number.isFinite(wo)) return w - wo
-    if (!Number.isFinite(w) && Number.isFinite(wo)) return Infinity // events push FI past the horizon
-    if (Number.isFinite(w) && !Number.isFinite(wo)) return -Infinity // events are what make FI reachable
-    return NaN
-  }, [effInp, proj, inp.lifeEvents])
 
   // Three FI tiers (lean/FI/fat) — all crossings computed in the Kotlin engine; here we just read them.
   // Red → amber → green across the three tiers: leanFI (bare-minimum, risky) → FI → fatFI (comfortable).
@@ -960,7 +929,7 @@ export default function App() {
             {/* Column 3 — the retirement plan */}
             <div className="space-y-3">
             <Section title="FI target" accent="#fb7185">
-              <OptionalField label="Retirement spend" prefix="$" help="Annual spending in retirement. Blank = current total (rent drops if you own a home). Anchors the FI tiers." value={inp.retirementSpending} placeholder={totalSpending(inp)} onChange={(v) => set('retirementSpending', v)} error={verr.retirementSpending} />
+              <OptionalField label="Retirement spend" prefix="$" help="Annual spending in retirement. Blank = current total (rent drops if you own a home). Anchors the FI tiers." value={inp.retirementSpending} placeholder={Math.round(proj.retireSpend)} onChange={(v) => set('retirementSpending', v)} error={verr.retirementSpending} />
               <Field label="Withdrawal rate" suffix="%" step={0.1} help="Share of the nest egg withdrawn per year (the 4% rule). FI target = spending ÷ this." value={pf('withdrawalRate')} defaultValue={pd('withdrawalRate')} onChange={(v) => setPct('withdrawalRate', v)} error={verr.withdrawalRate} />
               <Field label="Avg tax rate" suffix="%" step={0.1} help="Average tax on withdrawals; grosses up the target so you net your spending." value={pf('taxRate')} defaultValue={pd('taxRate')} onChange={(v) => setPct('taxRate', v)} error={verr.taxRate} />
               <Field label="leanFI" suffix="%" step={1} help="leanFI = this % of your spending (essentials only)." value={Math.round(inp.leanFactor * 100)} defaultValue={65} onChange={(v) => set('leanFactor', v / 100)} error={verr.leanFactor} />
@@ -1046,7 +1015,7 @@ export default function App() {
               <div className="mt-4 flex items-baseline justify-between gap-2">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Path to FI</div>
                 <p className="truncate text-[11px] leading-relaxed text-neutral-500">
-                  <span className="text-neutral-400">{usdShort(inp.retirementSpending ?? totalSpending(inp))}/yr</span> ÷ <span className="text-neutral-400">{(inp.withdrawalRate * 100).toFixed(1)}%</span> withdrawal, tax-grossed
+                  <span className="text-neutral-400">{usdShort(proj.retireSpend)}/yr</span> ÷ <span className="text-neutral-400">{(inp.withdrawalRate * 100).toFixed(1)}%</span> withdrawal, tax-grossed
                   {Math.round(proj.retirementEventCost) !== 0 && (
                     <> · {proj.retirementEventCost > 0 ? '+' : '−'}{usdShort(Math.abs(proj.retirementEventCost))}/yr events</>
                   )}
@@ -1087,7 +1056,7 @@ export default function App() {
               <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3.5 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3.5 sm:grid-cols-4">
                 <Stat label="Retire at" value={`${proj.retireAge}`} hint={`${Math.max(0, inp.lifeExpectancy - proj.retireAge)} yrs of retirement`} />
                 <Stat label="Portfolio then" value={usdShort(proj.lifeLiquid[retireIdx])} hint={`invested at ${proj.retireAge}`} />
-                <Stat label="Spend" value={`${usdShort(inp.retirementSpending ?? totalSpending(inp))}/yr`} hint={inp.socialSecurity > 0 ? `+ ${usdShort(ssActual)}/yr SS from ${claimAge}` : 'no Social Security'} />
+                <Stat label="Spend" value={`${usdShort(proj.retireSpend)}/yr`} hint={inp.socialSecurity > 0 ? `+ ${usdShort(ssActual)}/yr SS from ${claimAge}` : 'no Social Security'} />
                 <Stat label="Survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `runs dry at ${proj.depletionAge}` : `leaves ${usdShort(proj.lifeLiquid[deathIdx])} at ${inp.lifeExpectancy}`} />
               </div>
               <div className="mt-4 flex items-baseline justify-between gap-2">
@@ -1220,7 +1189,7 @@ export default function App() {
             )}
 
             {!compare && (
-              <LifeEventsPanel events={inp.lifeEvents} currentAge={inp.currentAge} onChange={(evs) => set('lifeEvents', evs)} colors={eventColors} impacts={eventImpacts} netImpact={netEventImpact} />
+              <LifeEventsPanel events={inp.lifeEvents} currentAge={inp.currentAge} onChange={(evs) => set('lifeEvents', evs)} colors={eventColors} impacts={eventImpacts.impacts} netImpact={eventImpacts.netYears} />
             )}
 
             {compare && (

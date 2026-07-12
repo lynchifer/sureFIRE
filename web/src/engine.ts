@@ -4,10 +4,7 @@
 import {
   projectFixedJs,
   monteCarloJs,
-  lifeSuccessRateJs,
-  recommendedRetireAgeJs,
-  affordabilityJs,
-  insightsJs,
+  analysisJs,
   eventImpactsJs,
   socialSecurityBenefitJs,
   childEvent,
@@ -60,6 +57,7 @@ export type WithdrawalStrategy = 'fixed' | 'vpw' | 'guardrails'
 export interface ProjView {
   fireTarget: number
   retirementEventCost: number
+  retireSpend: number // resolved retirement spending (override, or total minus the rent a held home replaces)
   savingsRate: number
   yearsToFire: number
   ageAtFire: number
@@ -203,7 +201,7 @@ function toInputs(i: FireInputs): FireInputsJs {
 export function runFixed(i: FireInputs): ProjView {
   const r = projectFixedJs(toInputs(i))
   return {
-    fireTarget: r.fireTarget, retirementEventCost: r.retirementEventCost, savingsRate: r.savingsRate, yearsToFire: r.yearsToFire, ageAtFire: r.ageAtFire,
+    fireTarget: r.fireTarget, retirementEventCost: r.retirementEventCost, retireSpend: r.retireSpend, savingsRate: r.savingsRate, yearsToFire: r.yearsToFire, ageAtFire: r.ageAtFire,
     leanTarget: r.leanTarget, leanYears: r.leanYears, leanAge: r.leanAge, fatTarget: r.fatTarget, fatYears: r.fatYears, fatAge: r.fatAge,
     netWorthAtFire: r.netWorthAtFire, retireAge: r.retireAge, claimAge: r.claimAge, depletionAge: r.depletionAge, lifeLiquid: arr(r.lifeLiquid), lifeNetWorth: arr(r.lifeNetWorth),
     ages: arr(r.ages), liquid: arr(r.liquid), saved: arr(r.saved), returns: arr(r.returns), netWorth: arr(r.netWorth),
@@ -221,21 +219,15 @@ export function runMonteCarlo(i: FireInputs): MCView {
   }
 }
 
-/** Probability your plan lasts to the death age if you retire AT your chosen RE age (life-path Monte
- *  Carlo: actual projected balance + the Social Security bridge, under the chosen withdrawal strategy). */
-export function runLifeSuccess(i: FireInputs): number {
-  return lifeSuccessRateJs(toInputs(i))
+export interface ImpactsView {
+  impacts: number[] // per-event MARGINAL FI impact (years), aligned to `i.lifeEvents` (disabled → NaN)
+  netYears: number // joint impact of ALL enabled events vs an event-free plan (NaN if none enabled)
 }
 
-/** The recommended "don't go broke" RE age — earliest age whose Monte Carlo drawdown survives to the death
- *  age ≥80% of the time (risk-adjusted, not average-case). */
-export function recommendedRetireAge(i: FireInputs): number {
-  return recommendedRetireAgeJs(toInputs(i))
-}
-
-/** Marginal effect of each life event on the FIRE date (years), aligned to `i.lifeEvents` (disabled → NaN). */
-export function runImpacts(i: FireInputs): number[] {
-  return arr(eventImpactsJs(toInputs(i)))
+/** Effect of the life events on the FIRE date — per-event marginals + the joint net, one engine call. */
+export function runImpacts(i: FireInputs): ImpactsView {
+  const r = eventImpactsJs(toInputs(i))
+  return { impacts: arr(r.impacts), netYears: r.netYears }
 }
 
 export interface AffordabilityView {
@@ -246,17 +238,6 @@ export interface AffordabilityView {
   homePriceAtCap: boolean
   kids: number // additional staggered children it could raise
   kidsAtCap: boolean
-}
-
-/** "What else could this plan afford?" — the most of each single lever (extra spend, a home, more kids)
- *  the plan sustains at the SAME ~80% Monte Carlo survival bar as the recommended retire age, evaluated at
- *  `i.retireAge`. All the binary-searching happens in the engine (fast, risk-adjusted, one boundary call). */
-export function runAffordability(i: FireInputs): AffordabilityView {
-  const a = affordabilityJs(toInputs(i))
-  return {
-    survives: a.survives, extraSpend: a.extraSpend, extraSpendAtCap: a.extraSpendAtCap,
-    homePrice: a.homePrice, homePriceAtCap: a.homePriceAtCap, kids: a.kids, kidsAtCap: a.kidsAtCap,
-  }
 }
 
 export interface InsightsView {
@@ -270,19 +251,41 @@ export interface InsightsView {
   delaySsSurvival: number
   allocShiftSurvival: number
   allocShiftToStocks: boolean // the better direction: true = toward stocks, false = toward bonds
+  allocStockPct: number // the allocation AFTER the suggested shift — apply verbatim (NaN = n/a)
+  allocBondPct: number
+  allocCashPct: number
   guardrailsSurvival: number
 }
 
-/** "Biggest levers" — the marginal effect of small concrete actions, each measured in the engine on its
- *  honest metric: cashflow nudges as deterministic Δ years-to-FI, risk-shaping nudges as Δ Monte Carlo
- *  survival at the same retire age. NaN = the lever doesn't apply to this plan. */
-export function runInsights(i: FireInputs): InsightsView {
-  const r = insightsJs(toInputs(i))
+export interface AnalysisView {
+  recommendedRetireAge: number // earliest age clearing ~80% Monte Carlo survival
+  retireAge: number // the age analyzed: the explicit input, else the recommendation (auto-tracking)
+  lifeSuccess: number // survival to the death age retiring AT `retireAge`
+  affordability: AffordabilityView
+  insights: InsightsView
+}
+
+/** The whole retirement-analysis story in ONE engine call: recommended age, resolved retire age, survival
+ *  odds, affordability headroom, and biggest-lever insights — computed together at the same risk-adjusted
+ *  footing so the pieces can't disagree. The retire-age sentinel (unset) resolves to the RECOMMENDED age. */
+export function runAnalysis(i: FireInputs): AnalysisView {
+  const r = analysisJs(toInputs(i))
+  const a = r.affordability
+  const s = r.insights
   return {
-    spendNudge: r.spendNudge, incomeNudge: r.incomeNudge, allocShift: r.allocShift,
-    spendLessFiYears: r.spendLessFiYears, earnMoreFiYears: r.earnMoreFiYears, noCreepFiYears: r.noCreepFiYears,
-    retireLaterSurvival: r.retireLaterSurvival, delaySsSurvival: r.delaySsSurvival,
-    allocShiftSurvival: r.allocShiftSurvival, allocShiftToStocks: r.allocShiftToStocks, guardrailsSurvival: r.guardrailsSurvival,
+    recommendedRetireAge: r.recommendedRetireAge, retireAge: r.retireAge, lifeSuccess: r.lifeSuccess,
+    affordability: {
+      survives: a.survives, extraSpend: a.extraSpend, extraSpendAtCap: a.extraSpendAtCap,
+      homePrice: a.homePrice, homePriceAtCap: a.homePriceAtCap, kids: a.kids, kidsAtCap: a.kidsAtCap,
+    },
+    insights: {
+      spendNudge: s.spendNudge, incomeNudge: s.incomeNudge, allocShift: s.allocShift,
+      spendLessFiYears: s.spendLessFiYears, earnMoreFiYears: s.earnMoreFiYears, noCreepFiYears: s.noCreepFiYears,
+      retireLaterSurvival: s.retireLaterSurvival, delaySsSurvival: s.delaySsSurvival,
+      allocShiftSurvival: s.allocShiftSurvival, allocShiftToStocks: s.allocShiftToStocks,
+      allocStockPct: s.allocStockPct, allocBondPct: s.allocBondPct, allocCashPct: s.allocCashPct,
+      guardrailsSurvival: s.guardrailsSurvival,
+    },
   }
 }
 

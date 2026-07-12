@@ -12,9 +12,11 @@ import kotlin.js.JsExport
  * Contract for a frontend (this is the ONLY surface a UI needs — swap the UI freely):
  *   1. Build life events with the `*Event` factories.
  *   2. Build ONE [FireInputsJs] (all the knobs, plus the events array).
- *   3. Call [projectFixedJs] / [monteCarloJs] / [eventImpactsJs] / [lifeSuccessRateJs] with that object.
+ *   3. Call the entry point for each speed tier: [projectFixedJs] + [eventImpactsJs] are cheap
+ *      deterministic runs (call per keystroke), [analysisJs] + [monteCarloJs] are Monte Carlo work
+ *      (call debounced). Each returns EVERYTHING its tier computes in one object.
  * ALL modeling lives behind here: tax gross-up, the retirement-spend fallback, which events count
- * (disabled ones are dropped), life-event compilation, tiers, drawdown, Monte Carlo, per-event impact.
+ * (disabled ones are dropped), life-event compilation, tiers, drawdown, Monte Carlo, impacts, analysis.
  */
 
 /** Claim-age-adjusted annual Social Security benefit, given the benefit at full retirement age. */
@@ -243,6 +245,7 @@ private fun FireInputsJs.toFixed(eventsOverride: Array<LifeEventInput> = events)
 class ProjectionResult(
     val fireTarget: Double,
     val retirementEventCost: Double,
+    val retireSpend: Double, // resolved retirement spending (override, or total minus the rent a held home replaces)
     val savingsRate: Double,
     val yearsToFire: Double,
     val ageAtFire: Int,
@@ -269,7 +272,7 @@ class ProjectionResult(
 )
 
 private fun ProjectionResult(p: Projection) = ProjectionResult(
-    p.fireTarget, p.retirementEventCost, p.savingsRate, p.yearsToFire, p.ageAtFire,
+    p.fireTarget, p.retirementEventCost, p.retireSpend, p.savingsRate, p.yearsToFire, p.ageAtFire,
     p.leanTarget, p.leanYears, p.leanAge, p.fatTarget, p.fatYears, p.fatAge, p.netWorthAtFire,
     p.retireAge, p.claimAge, p.depletionAge, p.lifeLiquid, p.lifeNetWorth,
     p.ages, p.liquid, p.saved, p.returns, p.netWorth, p.cash, p.homeValue, p.mortgageBalance,
@@ -278,33 +281,41 @@ private fun ProjectionResult(p: Projection) = ProjectionResult(
 @JsExport
 fun projectFixedJs(inputs: FireInputsJs): ProjectionResult = ProjectionResult(projectFixed(inputs.toFixed()))
 
+/** Per-event and joint effect of the life events on the FIRE date (years). */
+@JsExport
+class EventImpactsJs(
+    val impacts: DoubleArray, // per-event MARGINAL impact, aligned to [FireInputsJs.events]
+    val netYears: Double,     // joint impact of ALL enabled events vs. an event-free plan (NaN if none enabled)
+)
+
 /**
- * STANDALONE effect of each life event on the FIRE date: years-to-FIRE with ONLY that event added to
- * the plan, minus years-to-FIRE with NO events. Measuring every event against the same event-free base
- * makes the impacts **independent of each other** — adding or removing one event never changes another's
- * number (unlike a leave-one-out marginal, where the full-plan baseline shifts between them). Aligned to
- * [FireInputsJs.events] (disabled → NaN). Sentinels: +∞ = the event alone pushes FIRE past the horizon,
- * −∞ = the event alone enables FIRE (the event-free plan never reaches it), NaN = neither reaches / off.
+ * Effect of the life events on the FIRE date, in years:
+ *  - [EventImpactsJs.impacts]: each event's MARGINAL impact — years-to-FIRE with the whole plan minus
+ *    years-to-FIRE with everything EXCEPT that event. Each badge answers "what does removing this cost
+ *    me?" in the context of the rest, so it moves as other events come and go. Disabled → NaN.
+ *  - [EventImpactsJs.netYears]: the joint impact of ALL enabled events vs. an event-free plan — the
+ *    holistic "together they shift FI by…" readout.
+ * Sentinels for both: +∞ = pushes FIRE past the horizon, −∞ = is what makes FIRE reachable, NaN =
+ * neither side reaches / not applicable.
  */
 @JsExport
-fun eventImpactsJs(inputs: FireInputsJs): DoubleArray {
+fun eventImpactsJs(inputs: FireInputsJs): EventImpactsJs {
     val all = inputs.events
     fun fireYears(evs: Array<LifeEventInput>): Double = projectFixed(inputs.toFixed(evs)).yearsToFire
+    fun delta(with: Double, without: Double): Double = when {
+        !with.isNaN() && !without.isNaN() -> with - without // + delays FIRE, − speeds FIRE
+        !without.isNaN() && with.isNaN() -> Double.POSITIVE_INFINITY
+        !with.isNaN() && without.isNaN() -> Double.NEGATIVE_INFINITY
+        else -> Double.NaN
+    }
     val full = fireYears(all) // the WHOLE plan (compilation drops disabled events) — the shared reference
     val out = DoubleArray(all.size) { Double.NaN }
     for (k in all.indices) {
         if (!all[k].enabled) continue // a disabled event isn't in the plan → no marginal effect
-        // MARGINAL impact: the plan with everything EXCEPT event k. So each badge answers "what does
-        // removing this cost me?" in the context of the rest — it moves as you add/remove other events.
-        val without = fireYears(Array(all.size - 1) { i -> if (i < k) all[i] else all[i + 1] })
-        out[k] = when {
-            !full.isNaN() && !without.isNaN() -> full - without // + this event delays FIRE, − it speeds FIRE
-            !without.isNaN() && full.isNaN() -> Double.POSITIVE_INFINITY // it pushes FI past the horizon
-            !full.isNaN() && without.isNaN() -> Double.NEGATIVE_INFINITY // it's what makes FI reachable
-            else -> Double.NaN
-        }
+        out[k] = delta(full, fireYears(Array(all.size - 1) { i -> if (i < k) all[i] else all[i + 1] }))
     }
-    return out
+    val net = if (all.none { it.enabled }) Double.NaN else delta(full, fireYears(emptyArray()))
+    return EventImpactsJs(out, net)
 }
 
 // --- Monte Carlo -----------------------------------------------------------------------------------
@@ -344,24 +355,12 @@ fun monteCarloJs(inputs: FireInputsJs): MonteCarloResultJs {
     )
 }
 
-/** Probability your plan survives if you retire AT your chosen RE age: the share of Monte Carlo paths
- *  whose actual projected balance, drawn down (with the Social Security bridge) under the chosen strategy,
- *  lasts to the death age. Coherent with the chart — it's the same life-path the projection draws. */
-@JsExport
-fun lifeSuccessRateJs(inputs: FireInputsJs): Double {
-    val inp = inputs.toFixed()
-    return lifeSuccessRate(inp, inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD, MonteCarloModel.CORRELATION, MonteCarloModel.NU, MonteCarloModel.RUNS, MonteCarloModel.SEED)
-}
+// --- Analysis (recommended age + survival + affordability + insights, one call) ---------------------
 
-/** The recommended "don't go broke" RE age — earliest age whose Monte Carlo drawdown survives to the
- *  death age at least [MonteCarloModel.RECOMMEND_SURVIVAL] (80%) of the time. Risk-adjusted, not average-case. */
-@JsExport
-fun recommendedRetireAgeJs(inputs: FireInputsJs): Int = recommendedRetireAge(inputs.toFixed())
-
-/** Affordability headroom at the retire age in [inputs] (set it to the recommended age for the "at your
- *  recommended retirement" story). Each lever is the most of that one thing the plan sustains at the same
- *  ~80% Monte Carlo survival bar as the recommendation — home & child terms come from [EventDefaults] so an
- *  "affordable home" matches a hand-added one. `*AtCap` ⇒ the search maxed out (report the value as ≥). */
+/** Affordability headroom at the analyzed retire age: the most of each single lever the plan sustains at
+ *  the same ~80% Monte Carlo survival bar as the recommendation — home & child terms come from
+ *  [EventDefaults] so an "affordable home" matches a hand-added one. `*AtCap` ⇒ the search maxed out
+ *  (report the value as ≥). */
 @JsExport
 class AffordabilityJs(
     val survives: Boolean,
@@ -373,22 +372,11 @@ class AffordabilityJs(
     val kidsAtCap: Boolean,
 )
 
-@JsExport
-fun affordabilityJs(inputs: FireInputsJs): AffordabilityJs {
-    val a = affordability(
-        inputs.toFixed(),
-        EventDefaults.homeDownPct, EventDefaults.homeMortgageRate, EventDefaults.homeTermYears,
-        EventDefaults.homeAppreciation, EventDefaults.homeOngoingPct, EventDefaults.homeSellPct,
-        EventDefaults.childYears, EventDefaults.childAnnualCost, EventDefaults.childBirthCost, EventDefaults.childCollegeCost,
-    )
-    return AffordabilityJs(a.survives, a.extraSpend, a.extraSpendAtCap, a.homePrice, a.homePriceAtCap, a.kids, a.kidsAtCap)
-}
-
 /** "Biggest levers" — marginal effect of small concrete actions, each on its honest metric: cashflow
  *  nudges as deterministic Δ years-to-FI (positive = sooner), risk-shaping nudges as Δ Monte Carlo
  *  survival at the same retire age (fraction; paired paths, so a delta is paths flipping, not noise).
  *  NaN = the lever doesn't apply. The `*Nudge` fields echo the tested nudge sizes so UI copy always
- *  matches the math (see [InsightNudges]). */
+ *  matches the math (see [InsightNudges]); `alloc*Pct` is the full post-shift allocation to apply verbatim. */
 @JsExport
 class InsightsJs(
     val spendNudge: Double,          // $/yr the spend lever tested ("spend $100/mo less")
@@ -401,15 +389,43 @@ class InsightsJs(
     val delaySsSurvival: Double,
     val allocShiftSurvival: Double,
     val allocShiftToStocks: Boolean,
+    val allocStockPct: Double,       // the allocation AFTER the suggested shift (apply as-is; NaN = n/a)
+    val allocBondPct: Double,
+    val allocCashPct: Double,
     val guardrailsSurvival: Double,
 )
 
+/** One object with everything the retirement-analysis story needs — computed together, at the same
+ *  risk-adjusted footing, for the same resolved retire age, so the pieces can never disagree. */
 @JsExport
-fun insightsJs(inputs: FireInputsJs): InsightsJs {
-    val r = insights(inputs.toFixed())
-    return InsightsJs(
-        InsightNudges.SPEND_PER_YEAR, InsightNudges.INCOME_PER_YEAR, InsightNudges.ALLOC_SHIFT,
-        r.spendLessFiYears, r.earnMoreFiYears, r.noCreepFiYears,
-        r.retireLaterSurvival, r.delaySsSurvival, r.allocShiftSurvival, r.allocShiftToStocks, r.guardrailsSurvival,
+class AnalysisJs(
+    val recommendedRetireAge: Int, // earliest age clearing ~80% Monte Carlo survival
+    val retireAge: Int,            // the age analyzed: the explicit input, else the recommendation
+    val lifeSuccess: Double,       // survival to the death age retiring AT [retireAge]
+    val affordability: AffordabilityJs,
+    val insights: InsightsJs,
+)
+
+/** The single analysis entry point. Note the retire-age sentinel here resolves to the RECOMMENDED age
+ *  (auto-tracking), not the Social Security claim age like the projection entry points. */
+@JsExport
+fun analysisJs(inputs: FireInputsJs): AnalysisJs {
+    val r = analysis(
+        inputs.toFixed(),
+        EventDefaults.homeDownPct, EventDefaults.homeMortgageRate, EventDefaults.homeTermYears,
+        EventDefaults.homeAppreciation, EventDefaults.homeOngoingPct, EventDefaults.homeSellPct,
+        EventDefaults.childYears, EventDefaults.childAnnualCost, EventDefaults.childBirthCost, EventDefaults.childCollegeCost,
+    )
+    val a = r.affordability
+    val i = r.insights
+    return AnalysisJs(
+        r.recommendedRetireAge, r.retireAge, r.lifeSuccess,
+        AffordabilityJs(a.survives, a.extraSpend, a.extraSpendAtCap, a.homePrice, a.homePriceAtCap, a.kids, a.kidsAtCap),
+        InsightsJs(
+            InsightNudges.SPEND_PER_YEAR, InsightNudges.INCOME_PER_YEAR, InsightNudges.ALLOC_SHIFT,
+            i.spendLessFiYears, i.earnMoreFiYears, i.noCreepFiYears,
+            i.retireLaterSurvival, i.delaySsSurvival, i.allocShiftSurvival, i.allocShiftToStocks,
+            i.allocStockPct, i.allocBondPct, i.allocCashPct, i.guardrailsSurvival,
+        ),
     )
 }

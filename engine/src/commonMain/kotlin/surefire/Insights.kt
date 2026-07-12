@@ -22,6 +22,11 @@ class Insights(
     val delaySsSurvival: Double,     // claim Social Security one year later ⇒ Δ survival
     val allocShiftSurvival: Double,  // shift ALLOC_SHIFT of the portfolio (the better direction) ⇒ Δ survival
     val allocShiftToStocks: Boolean, // true = the better direction is toward stocks, false = toward bonds
+    // The full allocation AFTER the suggested shift (NaN when the lever doesn't apply) — a UI applies
+    // these verbatim instead of re-deriving the drain-bonds-then-cash rule (which would drift).
+    val allocStockPct: Double,
+    val allocBondPct: Double,
+    val allocCashPct: Double,
     val guardrailsSurvival: Double,  // switch fixed → guardrails withdrawals ⇒ Δ survival (NaN if not on fixed)
 )
 
@@ -76,13 +81,20 @@ fun insights(inp0: FixedInputs, runs: Int = MonteCarloModel.RECOMMEND_RUNS): Ins
         if (take < 0.02) return null
         return inp.copy(stockPct = inp.stockPct - take, bondPct = inp.bondPct + take)
     }
-    val up = towardStocks()?.let { surv(it) - baseSurv } ?: Double.NaN
-    val down = towardBonds()?.let { surv(it) - baseSurv } ?: Double.NaN
+    val upInp = towardStocks()
+    val downInp = towardBonds()
+    val up = upInp?.let { surv(it) - baseSurv } ?: Double.NaN
+    val down = downInp?.let { surv(it) - baseSurv } ?: Double.NaN
     val toStocks = !up.isNaN() && (down.isNaN() || up >= down)
     val alloc = if (toStocks) up else down // NaN when neither direction has a slice to move
+    val chosen = if (toStocks) upInp else downInp
 
     val guardrails = if (inp.withdrawalStrategy == WithdrawalStrategy.FIXED)
         surv(inp.copy(withdrawalStrategy = WithdrawalStrategy.GUARDRAILS)) - baseSurv else Double.NaN
 
-    return Insights(spendLess, earnMore, noCreep, retireLater, delaySs, alloc, toStocks, guardrails)
+    return Insights(
+        spendLess, earnMore, noCreep, retireLater, delaySs, alloc, toStocks,
+        chosen?.stockPct ?: Double.NaN, chosen?.bondPct ?: Double.NaN, chosen?.cashPct ?: Double.NaN,
+        guardrails,
+    )
 }
