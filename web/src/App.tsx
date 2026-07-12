@@ -609,7 +609,7 @@ export default function App() {
     ? [
         // Coast FI first — the headline slack: the earliest you could stop saving entirely.
         ...(analysis.coastAge >= 0 && analysis.coastAge < analysis.ra
-          ? [{ key: 'coast', icon: '🏖️', label: analysis.coastAge <= inp.currentAge ? `Stop saving today, coast to ${analysis.ra}` : `Stop saving at ${analysis.coastAge}, coast to ${analysis.ra}` }]
+          ? [{ key: 'coast', icon: '🏖️', label: analysis.coastAge <= inp.currentAge ? 'Save $0 from today — work just covers bills' : `Save $0 from ${analysis.coastAge} — work just covers bills` }]
           : []),
         ...(analysis.homePrice > 60_000 ? [{ key: 'home', icon: '🏠', label: `Buy a ${analysis.homePriceAtCap ? '≥' : ''}${usdShort(analysis.homePrice)} home` }] : []),
         ...(analysis.kids >= 1 ? [{ key: 'kids', icon: '👶', label: `Raise ${analysis.kids}${analysis.kidsAtCap ? '+' : ''} more kid${analysis.kids > 1 ? 's' : ''}` }] : []),
