@@ -1077,7 +1077,43 @@ export default function App() {
                   )
                 })}
               </div>
-              <div className="mt-3 h-1 rounded-full bg-gradient-to-r from-[#f87171]/50 via-[#fbbf24]/50 to-[#34d399]/50" />
+              {(() => {
+                // Milestone timeline: dots positioned by AGE along the horizon (now → the last milestone),
+                // so spacing is honest — milestones cluster or spread exactly as the plan does, and move as
+                // inputs change. Gradient stops align to the actual tier positions; 🏖️ Coast FI rides the
+                // same axis in sky blue. Falls back to the plain spectrum when nothing is reachable.
+                const marks = [
+                  ...(analysis && analysis.coastAge > inp.currentAge && analysis.coastAge < analysis.ra
+                    ? [{ key: 'coast', age: analysis.coastAge, color: '#38bdf8', hero: false, title: `Coast FI · age ${analysis.coastAge}` }]
+                    : []),
+                  ...heroTiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ key: t.label, age: t.age, color: t.color, hero: t.label === 'FI', title: `${t.label} · age ${t.age}` })),
+                ]
+                const end = marks.length ? Math.max(...marks.map((m) => m.age)) : inp.currentAge
+                if (end <= inp.currentAge)
+                  return <div className="mt-4 h-1 rounded-full bg-gradient-to-r from-[#f87171]/50 via-[#fbbf24]/50 to-[#34d399]/50" />
+                const pos = (a: number) => Math.min(98, Math.max(2, ((a - inp.currentAge) / (end - inp.currentAge)) * 100))
+                const stopAt = (t: (typeof heroTiers)[number], fallback: number) => (Number.isFinite(t.years) ? pos(t.age) : fallback)
+                const track = `linear-gradient(90deg, #f8717180 0%, #f8717180 ${stopAt(heroTiers[0], 0)}%, #fbbf2480 ${stopAt(heroTiers[1], 50)}%, #34d39980 ${stopAt(heroTiers[2], 100)}%)`
+                return (
+                  <div className="mt-4">
+                    <div className="relative h-2.5">
+                      <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full" style={{ background: track }} />
+                      {marks.map((m) => (
+                        <span
+                          key={m.key}
+                          title={m.title}
+                          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#0c0e13]"
+                          style={{ left: `${pos(m.age)}%`, width: m.hero ? 11 : 8, height: m.hero ? 11 : 8, background: m.color }}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-1 flex justify-between text-[10px] tabular-nums text-neutral-600">
+                      <span>now · {inp.currentAge}</span>
+                      <span>{end}</span>
+                    </div>
+                  </div>
+                )
+              })()}
               {analysis && analysis.coastAge >= 0 && analysis.coastAge < analysis.ra && (
                 <p className="mt-2.5 text-[11px] leading-relaxed text-neutral-500">
                   🏖️{' '}
