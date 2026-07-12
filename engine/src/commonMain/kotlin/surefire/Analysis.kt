@@ -20,6 +20,13 @@ class AnalysisResult(
     val coastAge: Int,
     val p10DepletionAge: Int,      // the roughest-decile path's dry age; -1 = even it lasts to the death age
     val p10FinalBalance: Double,   // the roughest-decile balance at death (0 when ≥10% of paths deplete)
+    // The lifestyle ladder — what each extra working year buys in retirement spending: the earliest
+    // ~80%-safe retire age funding each tier of the resolved retirement spend. For a plan hugging the
+    // recommendation (headroom ≈ 0 by construction), THIS is the aspirational readout: retire at
+    // [retireAge] on 1×, or at [fatRetireAge] on fatFactor× the lifestyle.
+    val retireSpendBase: Double,   // the resolved 1× retirement spend the tiers multiply
+    val leanRetireAge: Int,        // earliest ~80% age funding leanFactor × retireSpendBase
+    val fatRetireAge: Int,         // earliest ~80% age funding fatFactor × retireSpendBase
     val affordability: Affordability,
     val insights: Insights,
 )
@@ -51,9 +58,17 @@ fun analysis(
             lo
         }
     }
+    // Lifestyle ladder: rerun the recommended-age search with the retirement spend pinned to each tier
+    // multiple of the RESOLVED base spend (housing-aware, or the explicit override) — "retire at X on
+    // lean, at eff on 1×, at Y on fat". Monotonic in spending, so leanAge ≤ rec ≤ fatAge.
+    val retireSpendBase = projectFixed(inp).retireSpend
+    fun tierAge(mult: Double): Int = recommendedRetireAge(inp.copy(retirementSpending = (retireSpendBase * mult).coerceAtLeast(1.0)))
     val afford = affordability(
         inp, homeDownPct, homeMortgageRate, homeTermYears, homeAppreciation, homeOngoingPct, homeSellPct,
         childYears, childAnnualCost, childBirthCost, childCollegeCost,
     )
-    return AnalysisResult(rec, eff, outcomes.survival, coastAge, outcomes.p10DepletionAge, outcomes.p10FinalBalance, afford, insights(inp))
+    return AnalysisResult(
+        rec, eff, outcomes.survival, coastAge, outcomes.p10DepletionAge, outcomes.p10FinalBalance,
+        retireSpendBase, tierAge(inp0.leanFactor), tierAge(inp0.fatFactor), afford, insights(inp),
+    )
 }

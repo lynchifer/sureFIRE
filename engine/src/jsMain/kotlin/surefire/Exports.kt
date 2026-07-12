@@ -405,6 +405,9 @@ class AnalysisJs(
     val coastAge: Int,             // earliest stop-saving age still clearing ~80% (Coast FI); -1 = no slack
     val p10DepletionAge: Int,      // the roughest-decile path's dry age; -1 = even it lasts to the death age
     val p10FinalBalance: Double,   // the roughest-decile balance at death (0 when ≥10% of paths deplete)
+    val retireSpendBase: Double,   // the resolved 1× retirement spend the lifestyle tiers multiply
+    val leanRetireAge: Int,        // earliest ~80% age funding leanFactor × retireSpendBase
+    val fatRetireAge: Int,         // earliest ~80% age funding fatFactor × retireSpendBase
     val affordability: AffordabilityJs,
     val insights: InsightsJs,
 )
@@ -423,6 +426,7 @@ fun analysisJs(inputs: FireInputsJs): AnalysisJs {
     val i = r.insights
     return AnalysisJs(
         r.recommendedRetireAge, r.retireAge, r.lifeSuccess, r.coastAge, r.p10DepletionAge, r.p10FinalBalance,
+        r.retireSpendBase, r.leanRetireAge, r.fatRetireAge,
         AffordabilityJs(a.survives, a.extraSpend, a.extraSpendAtCap, a.homePrice, a.homePriceAtCap, a.kids, a.kidsAtCap),
         InsightsJs(
             InsightNudges.SPEND_PER_YEAR, InsightNudges.INCOME_PER_YEAR, InsightNudges.ALLOC_SHIFT,

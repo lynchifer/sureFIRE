@@ -87,6 +87,24 @@ class AnalysisTest {
     }
 
     @Test
+    fun lifestyleLadderIsMonotonicInSpending() {
+        // A richer retirement needs a later ~80%-safe start: leanAge ≤ the 1× recommendation ≤ fatAge.
+        // (reference() leaves the tier factors at 1.0 — set the app's real lean/fat spread.)
+        val r = run(reference().copy(socialSecurity = 24_000.0, leanFactor = 0.65, fatFactor = 2.0))
+        assertTrue(r.leanRetireAge <= r.recommendedRetireAge, "lean (${r.leanRetireAge}) must not be later than 1× (${r.recommendedRetireAge})")
+        assertTrue(r.recommendedRetireAge <= r.fatRetireAge, "fat (${r.fatRetireAge}) must not be earlier than 1× (${r.recommendedRetireAge})")
+        assertTrue(r.fatRetireAge > r.leanRetireAge, "with fatFactor 2× vs leanFactor 0.65× the ladder must actually spread")
+        assertEquals(40_000.0, r.retireSpendBase) // reference() sets an explicit override — used verbatim
+    }
+
+    @Test
+    fun overfundedPlanRetiresTodayOnEveryTier() {
+        val r = run(reference().copy(initialInvestments = 50_000_000.0))
+        assertEquals(reference().currentAge, r.leanRetireAge)
+        assertEquals(reference().currentAge, r.fatRetireAge)
+    }
+
+    @Test
     fun fiProgressIsTodaysBalanceOverTheTarget() {
         val p = projectFixed(reference())
         assertEquals(25_000.0 / p.fireTarget, p.fiProgress, 1e-12)

@@ -265,6 +265,9 @@ export interface AnalysisView {
   coastAge: number // earliest stop-saving age still clearing ~80% (Coast FI); -1 = no slack
   p10DepletionAge: number // the roughest-decile path's dry age; -1 = even it lasts to the death age
   p10FinalBalance: number // the roughest-decile balance at death (0 when ≥10% of paths deplete)
+  retireSpendBase: number // the resolved 1× retirement spend the lifestyle tiers multiply
+  leanRetireAge: number // earliest ~80% age funding leanFactor × retireSpendBase
+  fatRetireAge: number // earliest ~80% age funding fatFactor × retireSpendBase
   affordability: AffordabilityView
   insights: InsightsView
 }
@@ -279,6 +282,7 @@ export function runAnalysis(i: FireInputs): AnalysisView {
   return {
     recommendedRetireAge: r.recommendedRetireAge, retireAge: r.retireAge, lifeSuccess: r.lifeSuccess,
     coastAge: r.coastAge, p10DepletionAge: r.p10DepletionAge, p10FinalBalance: r.p10FinalBalance,
+    retireSpendBase: r.retireSpendBase, leanRetireAge: r.leanRetireAge, fatRetireAge: r.fatRetireAge,
     affordability: {
       survives: a.survives, extraSpend: a.extraSpend, extraSpendAtCap: a.extraSpendAtCap,
       homePrice: a.homePrice, homePriceAtCap: a.homePriceAtCap, kids: a.kids, kidsAtCap: a.kidsAtCap,

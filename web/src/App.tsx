@@ -676,6 +676,27 @@ export default function App() {
     ret.sort((a, b) => b.score - a.score)
     return [...acc, ...ret].slice(0, 5)
   })()
+  // The lifestyle ladder: the earliest ~80%-safe retire age at each spending tier — the aspirational
+  // readout for plans hugging the recommendation (where "room to spare" is ~0 by construction, e.g. a
+  // high-net-worth plan on the auto age). lean/fat rows are one-tap adoptable: set that retirement
+  // spend and let the retire age re-track the new recommendation.
+  const ladderRows = (() => {
+    const base = analysisData.retireSpendBase
+    const row = (key: string, icon: string, name: string, f: number, age: number, adoptable = false) => ({
+      key,
+      icon,
+      label: `${name} · ${usdShort(base * f)}/yr`,
+      effect: age < inp.lifeExpectancy ? `retire at ${age}` : `not by ${inp.lifeExpectancy}`,
+      apply: adoptable && age < inp.lifeExpectancy
+        ? () => updateInputs((i) => ({ ...i, retirementSpending: Math.round(base * f), retireAge: undefined }))
+        : undefined,
+    })
+    return [
+      row('lean', '🥗', 'leanFI', inp.leanFactor, analysisData.leanRetireAge, true),
+      row('base', '🍽️', 'your spend', 1, analysisData.recommendedRetireAge),
+      row('fat', '🥩', 'fatFI', inp.fatFactor, analysisData.fatRetireAge, true),
+    ]
+  })()
   // Affordability headroom as rows in the SAME grammar as the levers (icon + phrase → consequence),
   // so the whole Analysis section reads as one feature instead of chips-vs-rows.
   const roomRows = analysis
@@ -1211,6 +1232,14 @@ export default function App() {
                       {' '}Roughest 10% of markets: {analysisData.p10DepletionAge >= 0 ? `dry by ${analysisData.p10DepletionAge}` : `${usdShort(analysisData.p10FinalBalance)} still left at ${inp.lifeExpectancy}`}.
                     </span>
                   </p>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">Lifestyle ladder · earliest ~80% retirement per spend</p>
+                    <div className="mt-2 space-y-2">
+                      {ladderRows.map((l) => (
+                        <AnalysisRow key={l.key} icon={l.icon} label={l.label} effect={l.effect} effectClass="font-semibold text-neutral-200" apply={l.apply} />
+                      ))}
+                    </div>
+                  </div>
                   {analysis && roomRows.length > 0 && (
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">Room to spare at {analysis.ra} · one at a time</p>
