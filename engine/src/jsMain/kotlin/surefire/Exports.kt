@@ -383,3 +383,33 @@ fun affordabilityJs(inputs: FireInputsJs): AffordabilityJs {
     )
     return AffordabilityJs(a.survives, a.extraSpend, a.extraSpendAtCap, a.homePrice, a.homePriceAtCap, a.kids, a.kidsAtCap)
 }
+
+/** "Biggest levers" — marginal effect of small concrete actions, each on its honest metric: cashflow
+ *  nudges as deterministic Δ years-to-FI (positive = sooner), risk-shaping nudges as Δ Monte Carlo
+ *  survival at the same retire age (fraction; paired paths, so a delta is paths flipping, not noise).
+ *  NaN = the lever doesn't apply. The `*Nudge` fields echo the tested nudge sizes so UI copy always
+ *  matches the math (see [InsightNudges]). */
+@JsExport
+class InsightsJs(
+    val spendNudge: Double,          // $/yr the spend lever tested ("spend $100/mo less")
+    val incomeNudge: Double,         // $/yr the income lever tested ("earn $5k/yr more")
+    val allocShift: Double,          // fraction of the portfolio the allocation lever moves
+    val spendLessFiYears: Double,
+    val earnMoreFiYears: Double,
+    val noCreepFiYears: Double,
+    val retireLaterSurvival: Double,
+    val delaySsSurvival: Double,
+    val allocShiftSurvival: Double,
+    val allocShiftToStocks: Boolean,
+    val guardrailsSurvival: Double,
+)
+
+@JsExport
+fun insightsJs(inputs: FireInputsJs): InsightsJs {
+    val r = insights(inputs.toFixed())
+    return InsightsJs(
+        InsightNudges.SPEND_PER_YEAR, InsightNudges.INCOME_PER_YEAR, InsightNudges.ALLOC_SHIFT,
+        r.spendLessFiYears, r.earnMoreFiYears, r.noCreepFiYears,
+        r.retireLaterSurvival, r.delaySsSurvival, r.allocShiftSurvival, r.allocShiftToStocks, r.guardrailsSurvival,
+    )
+}

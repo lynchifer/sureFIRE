@@ -7,6 +7,7 @@ import {
   lifeSuccessRateJs,
   recommendedRetireAgeJs,
   affordabilityJs,
+  insightsJs,
   eventImpactsJs,
   socialSecurityBenefitJs,
   childEvent,
@@ -255,6 +256,33 @@ export function runAffordability(i: FireInputs): AffordabilityView {
   return {
     survives: a.survives, extraSpend: a.extraSpend, extraSpendAtCap: a.extraSpendAtCap,
     homePrice: a.homePrice, homePriceAtCap: a.homePriceAtCap, kids: a.kids, kidsAtCap: a.kidsAtCap,
+  }
+}
+
+export interface InsightsView {
+  spendNudge: number // $/yr the spend lever tested ("spend $100/mo less")
+  incomeNudge: number // $/yr the income lever tested
+  allocShift: number // fraction of the portfolio the allocation lever moves
+  spendLessFiYears: number // Δ years-to-FI, positive = sooner (NaN = doesn't apply)
+  earnMoreFiYears: number
+  noCreepFiYears: number
+  retireLaterSurvival: number // Δ Monte Carlo survival (fraction) at the same retire age
+  delaySsSurvival: number
+  allocShiftSurvival: number
+  allocShiftToStocks: boolean // the better direction: true = toward stocks, false = toward bonds
+  guardrailsSurvival: number
+}
+
+/** "Biggest levers" — the marginal effect of small concrete actions, each measured in the engine on its
+ *  honest metric: cashflow nudges as deterministic Δ years-to-FI, risk-shaping nudges as Δ Monte Carlo
+ *  survival at the same retire age. NaN = the lever doesn't apply to this plan. */
+export function runInsights(i: FireInputs): InsightsView {
+  const r = insightsJs(toInputs(i))
+  return {
+    spendNudge: r.spendNudge, incomeNudge: r.incomeNudge, allocShift: r.allocShift,
+    spendLessFiYears: r.spendLessFiYears, earnMoreFiYears: r.earnMoreFiYears, noCreepFiYears: r.noCreepFiYears,
+    retireLaterSurvival: r.retireLaterSurvival, delaySsSurvival: r.delaySsSurvival,
+    allocShiftSurvival: r.allocShiftSurvival, allocShiftToStocks: r.allocShiftToStocks, guardrailsSurvival: r.guardrailsSurvival,
   }
 }
 

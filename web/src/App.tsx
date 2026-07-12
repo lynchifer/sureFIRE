@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
-import { runFixed, runMonteCarlo, runLifeSuccess, recommendedRetireAge, runImpacts, runAffordability, socialSecurityBenefit, totalSpending, DEFAULTS } from './engine'
+import { runFixed, runMonteCarlo, runLifeSuccess, recommendedRetireAge, runImpacts, runAffordability, runInsights, socialSecurityBenefit, totalSpending, DEFAULTS } from './engine'
 import type { FireInputs, ProjView } from './engine'
 import Chart from './Chart'
 import type { EChartsOption } from 'echarts'
@@ -558,6 +558,50 @@ export default function App() {
     const a = runAffordability(base)
     return a.survives ? { ra: base.retireAge ?? recRetire, ...a } : null
   }, [mcInp, recRetire, inp.retireAge])
+  // "Biggest levers" — the marginal effect of small concrete actions, computed in the engine on the
+  // honest metric per lever: cashflow nudges as deterministic Δ FI years, risk-shaping nudges as
+  // Δ Monte Carlo survival at the same retire age (so "more stocks" can't free-ride on steady returns).
+  const insights = useMemo(() => runInsights(inp.retireAge == null ? { ...mcInp, retireAge: recRetire } : mcInp), [mcInp, recRetire, inp.retireAge])
+  // Rank the levers into display rows (accumulation first, then retirement, each by effect; NaN and
+  // negligible effects drop out via the >= gates). Plain per-render build — the math is in the memo.
+  type LeverRow = { key: string; icon: string; label: string; effect: string; score: number; apply?: () => void }
+  const levers = (() => {
+    const fi = (d: number) => `FI ${d.toFixed(1)} yr sooner`
+    const pts = (d: number) => `+${Math.round(d * 100)} pts survival`
+    const acc: LeverRow[] = []
+    const ret: LeverRow[] = []
+    if (insights.spendLessFiYears >= 0.15)
+      acc.push({ key: 'spend', icon: '✂️', label: `Spend ${usdShort(insights.spendNudge / 12)}/mo less`, effect: fi(insights.spendLessFiYears), score: insights.spendLessFiYears })
+    if (insights.earnMoreFiYears >= 0.15)
+      acc.push({ key: 'earn', icon: '💼', label: `Earn ${usdShort(insights.incomeNudge)}/yr more`, effect: fi(insights.earnMoreFiYears), score: insights.earnMoreFiYears })
+    if (insights.noCreepFiYears >= 0.15)
+      acc.push({ key: 'creep', icon: '🧊', label: 'Cut the lifestyle creep', effect: fi(insights.noCreepFiYears), score: insights.noCreepFiYears })
+    if (insights.retireLaterSurvival >= 0.015)
+      ret.push({ key: 'retire', icon: '⏳', label: `Retire at ${proj.retireAge + 1} instead`, effect: pts(insights.retireLaterSurvival), score: insights.retireLaterSurvival, apply: () => set('retireAge', proj.retireAge + 1) })
+    if (insights.delaySsSurvival >= 0.015)
+      ret.push({ key: 'ss', icon: '🏛️', label: `Claim Social Security at ${proj.claimAge + 1}`, effect: pts(insights.delaySsSurvival), score: insights.delaySsSurvival, apply: () => set('socialSecurityAge', proj.claimAge + 1) })
+    if (insights.allocShiftSurvival >= 0.015)
+      ret.push({
+        key: 'alloc', icon: insights.allocShiftToStocks ? '📈' : '⚖️',
+        label: `Shift ${Math.round(insights.allocShift * 100)} pts into ${insights.allocShiftToStocks ? 'stocks' : 'bonds'}`,
+        effect: pts(insights.allocShiftSurvival), score: insights.allocShiftSurvival,
+        // Mirror the engine's shift rule: toward stocks drains bonds first then cash; toward bonds drains stocks.
+        apply: () => updateInputs((i) => {
+          if (insights.allocShiftToStocks) {
+            const take = Math.min(insights.allocShift, i.bondPct + i.cashPct)
+            const fromBonds = Math.min(take, i.bondPct)
+            return { ...i, stockPct: round2(i.stockPct + take), bondPct: round2(i.bondPct - fromBonds), cashPct: round2(i.cashPct - (take - fromBonds)) }
+          }
+          const take = Math.min(insights.allocShift, i.stockPct)
+          return { ...i, stockPct: round2(i.stockPct - take), bondPct: round2(i.bondPct + take) }
+        }),
+      })
+    if (insights.guardrailsSurvival >= 0.015)
+      ret.push({ key: 'guardrails', icon: '🚧', label: 'Guardrails withdrawals', effect: pts(insights.guardrailsSurvival), score: insights.guardrailsSurvival, apply: () => set('withdrawalStrategy', 'guardrails') })
+    acc.sort((a, b) => b.score - a.score)
+    ret.sort((a, b) => b.score - a.score)
+    return [...acc, ...ret].slice(0, 5)
+  })()
   const eventColors = inp.lifeEvents.map((_, i) => EVENT_COLORS[i % EVENT_COLORS.length])
   // Per-event MARGINAL FIRE-date impact (this event's effect given the rest of the plan) — computed in
   // the engine against effInp, so each badge moves as you add/remove events AND as the retire age changes.
@@ -1102,6 +1146,28 @@ export default function App() {
                       )}
                     </div>
                     <p className="mt-2 text-[10px] leading-snug text-neutral-600">Each shown on its own — the most of that one lever the plan keeps ~80% of markets alive to {inp.lifeExpectancy}, holding the rest fixed.</p>
+                  </div>
+                )}
+                {levers.length > 0 && (
+                  <div className="border-t border-white/[0.06] pt-3">
+                    <p className="text-[11px] leading-relaxed text-neutral-500">Biggest levers from here…</p>
+                    <div className="mt-2 space-y-2">
+                      {levers.map((l) => (
+                        <div key={l.key} className="flex items-baseline justify-between gap-3 text-xs">
+                          <span className="min-w-0 truncate text-neutral-400">
+                            <span className="mr-1.5">{l.icon}</span>
+                            {l.apply ? (
+                              <button type="button" onClick={l.apply} className="text-neutral-300 underline decoration-dotted decoration-neutral-600 underline-offset-2 hover:text-emerald-300" title="Apply to your plan">
+                                {l.label}
+                              </button>
+                            ) : (
+                              l.label
+                            )}
+                          </span>
+                          <span className="shrink-0 font-semibold tabular-nums text-emerald-300">{l.effect}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
