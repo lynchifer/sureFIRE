@@ -578,7 +578,7 @@ export default function App() {
         apply: () => updateInputs((i) => ({ ...i, stockPct: round2(insights.allocStockPct), bondPct: round2(insights.allocBondPct), cashPct: round2(insights.allocCashPct) })),
       })
     if (insights.guardrailsSurvival >= 0.015)
-      ret.push({ key: 'guardrails', icon: '🚧', label: 'Flexible spending — trim 10% in downturns', effect: pts(insights.guardrailsSurvival), score: insights.guardrailsSurvival, apply: () => set('withdrawalStrategy', 'guardrails') })
+      ret.push({ key: 'guardrails', icon: '🚧', label: 'Trim spending 10% in downturns', effect: pts(insights.guardrailsSurvival), score: insights.guardrailsSurvival, apply: () => set('withdrawalStrategy', 'guardrails') })
     acc.sort((a, b) => b.score - a.score)
     ret.sort((a, b) => b.score - a.score)
     return [...acc, ...ret].slice(0, 5)
@@ -1004,15 +1004,20 @@ export default function App() {
                 <li>I don't save your data — {brand}FIRE has no backend, and nothing you type ever leaves your browser. Don't believe me? <a href="https://github.com/lynchifer/sureFIRE" target="_blank" rel="noreferrer" className="text-neutral-300 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-200">read the source</a>.</li>
               </ul>
             </details>
-            <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-b from-emerald-500/[0.05] to-white/[0.015] p-5">
+            {/* Plan hero card: one container, zero nested panels. Three zones (Path to FI / In retirement /
+                Analysis) separated by hairlines with a uniform label row; FI is the single hero number,
+                flanked by lean/fat and connected by the red→green tier gradient. Color is signal only:
+                tier tints, the risk-graded Survives stat, and the state-toned analysis accent bar. */}
+            <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-b from-emerald-500/[0.04] to-white/[0.015] p-5">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-neutral-100">
                   {active?.name ?? 'Plan'}
                   {showMc ? <span className="font-normal text-neutral-500"> · Monte Carlo median</span> : ''}
                 </div>
-                <div className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium tabular-nums text-neutral-400">{pct(proj.savingsRate, 0)} saved</div>
+                <div className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium tabular-nums text-neutral-400">{pct(proj.savingsRate, 0)} saved</div>
               </div>
-              <div className="mt-4 flex items-baseline justify-between gap-2">
+
+              <div className="mt-5 flex items-baseline justify-between gap-2">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Path to FI</div>
                 <p className="truncate text-[11px] leading-relaxed text-neutral-500">
                   <span className="text-neutral-400">{usdShort(proj.retireSpend)}/yr</span> ÷ <span className="text-neutral-400">{(inp.withdrawalRate * 100).toFixed(1)}%</span> withdrawal, tax-grossed
@@ -1021,58 +1026,53 @@ export default function App() {
                   )}
                 </p>
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-2.5">
-                {heroTiers.map((t) => {
+              <div className="mt-3 grid grid-cols-3 items-end gap-2">
+                {heroTiers.map((t, i) => {
                   const fin = Number.isFinite(t.years)
+                  const hero = i === 1 // FI: the headline; lean/fat flank it
+                  const align = i === 0 ? 'items-start text-left' : hero ? 'items-center text-center' : 'items-end text-right'
                   return (
-                    <div
-                      key={t.label}
-                      className="min-w-0 rounded-xl border p-3"
-                      style={{ borderColor: hexA(t.color, 0.22), background: hexA(t.color, 0.07) }}
-                    >
-                      <div className="flex items-center gap-1 text-sm font-semibold" style={{ color: t.color }}>
-                        <span className="text-base">{t.icon}</span>
+                    <div key={t.label} className={`flex min-w-0 flex-col ${align}`}>
+                      <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: t.color }}>
+                        <span className="text-sm leading-none">{t.icon}</span>
                         {t.label}
                       </div>
-                      <div className={`mt-2 flex items-baseline gap-1 font-bold leading-none tabular-nums ${fin ? 'text-white' : 'text-neutral-600'}`}>
-                        <span className="text-2xl sm:text-[2.1rem]">{fin ? t.years.toFixed(1) : '—'}</span>
-                        {fin && <span className="text-xs font-medium text-neutral-400">yr</span>}
+                      <div className={`mt-1.5 flex items-baseline gap-1 font-bold leading-none tabular-nums ${fin ? (hero ? 'text-white' : 'text-neutral-300') : 'text-neutral-600'}`}>
+                        <span className={hero ? 'text-[2.5rem] sm:text-5xl' : 'text-xl sm:text-2xl'}>{fin ? t.years.toFixed(1) : '—'}</span>
+                        {fin && <span className={`font-medium text-neutral-500 ${hero ? 'text-sm' : 'text-[11px]'}`}>yr</span>}
                       </div>
-                      <div className="mt-1.5 flex flex-wrap gap-x-1 text-[11px] tabular-nums text-neutral-500">
-                        {fin ? (
-                          <>
-                            <span className="whitespace-nowrap">age {t.age}</span>
-                            <span className="whitespace-nowrap">· {usdShort(t.target)}</span>
-                          </>
-                        ) : (
-                          <span className="whitespace-nowrap">{usdShort(t.target)} target</span>
-                        )}
+                      <div className="mt-1.5 whitespace-nowrap text-[11px] tabular-nums text-neutral-500">
+                        {fin ? <>age {t.age} · {usdShort(t.target)}</> : <>{usdShort(t.target)} target</>}
                       </div>
                     </div>
                   )
                 })}
               </div>
-              <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">In retirement</div>
-              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3.5 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3.5 sm:grid-cols-4">
-                <Stat label="Retire at" value={`${proj.retireAge}`} hint={`${Math.max(0, inp.lifeExpectancy - proj.retireAge)} yrs of retirement`} />
-                <Stat label="Portfolio then" value={usdShort(proj.lifeLiquid[retireIdx])} hint={`invested at ${proj.retireAge}`} />
-                <Stat label="Spend" value={`${usdShort(proj.retireSpend)}/yr`} hint={inp.socialSecurity > 0 ? `+ ${usdShort(ssActual)}/yr SS from ${claimAge}` : 'no Social Security'} />
-                <Stat label="Survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `runs dry at ${proj.depletionAge}` : `leaves ${usdShort(proj.lifeLiquid[deathIdx])} at ${inp.lifeExpectancy}`} />
+              <div className="mt-3 h-1 rounded-full bg-gradient-to-r from-[#f87171]/50 via-[#fbbf24]/50 to-[#34d399]/50" />
+
+              <div className="mt-4 border-t border-white/[0.06] pt-4">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">In retirement</div>
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-4">
+                  <Stat label="Retire at" value={`${proj.retireAge}`} hint={`${Math.max(0, inp.lifeExpectancy - proj.retireAge)} yrs of retirement`} />
+                  <Stat label="Portfolio then" value={usdShort(proj.lifeLiquid[retireIdx])} hint={`invested at ${proj.retireAge}`} />
+                  <Stat label="Spend" value={`${usdShort(proj.retireSpend)}/yr`} hint={inp.socialSecurity > 0 ? `+ ${usdShort(ssActual)}/yr SS from ${claimAge}` : 'no Social Security'} />
+                  <Stat label="Survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `runs dry at ${proj.depletionAge}` : `leaves ${usdShort(proj.lifeLiquid[deathIdx])} at ${inp.lifeExpectancy}`} />
+                </div>
               </div>
-              <div className="mt-4 flex items-baseline justify-between gap-2">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Analysis</div>
-                {showMc && mc && (
-                  <p className="truncate text-[11px] tabular-nums text-neutral-500">
-                    {Number.isFinite(mc.medianYears)
-                      ? `${(mc.successRate * 100).toFixed(0)}% reach FI in ${inp.maxYears} yr${Number.isFinite(mc.p10Years) ? ` · p10–p90 ${mc.p10Years.toFixed(0)}–${mc.p90Years.toFixed(0)}` : ''}`
-                      : `most paths miss FI in ${inp.maxYears} yr`}
-                  </p>
-                )}
-              </div>
-              <div className="mt-2 space-y-3 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3.5">
-                <div className="flex items-start gap-2.5">
-                  <span className="mt-px text-sm leading-none">💡</span>
-                  <p className="text-xs leading-relaxed text-neutral-400">
+
+              <div className="mt-4 border-t border-white/[0.06] pt-4">
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Analysis</div>
+                  {showMc && mc && (
+                    <p className="truncate text-[11px] tabular-nums text-neutral-500">
+                      {Number.isFinite(mc.medianYears)
+                        ? `${(mc.successRate * 100).toFixed(0)}% reach FI in ${inp.maxYears} yr${Number.isFinite(mc.p10Years) ? ` · p10–p90 ${mc.p10Years.toFixed(0)}–${mc.p90Years.toFixed(0)}` : ''}`
+                        : `most paths miss FI in ${inp.maxYears} yr`}
+                    </p>
+                  )}
+                </div>
+                <div className="mt-3 space-y-4">
+                  <p className={`border-l-2 pl-3 text-xs leading-relaxed text-neutral-400 ${planBroke ? 'border-rose-400/50' : proj.retireAge < recRetire ? 'border-amber-400/50' : 'border-emerald-400/50'}`}>
                     <button type="button" onClick={() => set('retireAge', recRetire)} className="font-semibold text-emerald-400 underline decoration-dotted underline-offset-2 hover:text-emerald-300">
                       Age {recRetire}
                     </button>{' '}
@@ -1085,60 +1085,59 @@ export default function App() {
                       <span className="text-emerald-300"> Your age {proj.retireAge} clears <span className="font-semibold">{pct(lifeSuccess, 0)}</span>.</span>
                     )}
                   </p>
-                </div>
-                {analysis && (analysis.extraSpend > 1000 || analysis.homePrice > 60_000 || analysis.kids >= 1) && (
-                  <div className="border-t border-white/[0.06] pt-3">
-                    <p className="text-[11px] leading-relaxed text-neutral-500">
-                      Retiring at <span className="text-neutral-300">{analysis.ra}</span>, you'd still stay ~80% safe while adding…
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {analysis.homePrice > 60_000 && (
-                        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
-                          <span className="text-sm">🏠</span>
-                          <span className="text-sm font-semibold text-neutral-100">{analysis.homePriceAtCap ? '≥' : ''}{usdShort(analysis.homePrice)}</span>
-                          <span className="text-[11px] text-neutral-500">home</span>
-                        </span>
-                      )}
-                      {analysis.kids >= 1 && (
-                        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
-                          <span className="text-sm">👶</span>
-                          <span className="text-sm font-semibold text-neutral-100">{analysis.kids}{analysis.kidsAtCap ? '+' : ''}</span>
-                          <span className="text-[11px] text-neutral-500">more kid{analysis.kids > 1 ? 's' : ''}</span>
-                        </span>
-                      )}
-                      {analysis.extraSpend > 1000 && (
-                        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
-                          <span className="text-sm">💸</span>
-                          <span className="text-sm font-semibold text-neutral-100">{analysis.extraSpendAtCap ? '≥' : '+'}{usdShort(analysis.extraSpend)}/yr</span>
-                          <span className="text-[11px] text-neutral-500">spending</span>
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-2 text-[10px] leading-snug text-neutral-600">Each shown on its own — the most of that one lever the plan keeps ~80% of markets alive to {inp.lifeExpectancy}, holding the rest fixed.</p>
-                  </div>
-                )}
-                {levers.length > 0 && (
-                  <div className="border-t border-white/[0.06] pt-3">
-                    <p className="text-[11px] leading-relaxed text-neutral-500">Biggest levers from here…</p>
-                    <div className="mt-2 space-y-2">
-                      {levers.map((l) => (
-                        <div key={l.key} className="flex items-baseline justify-between gap-3 text-xs">
-                          <span className="min-w-0 truncate text-neutral-400">
-                            <span className="mr-1.5">{l.icon}</span>
-                            {l.apply ? (
-                              <button type="button" onClick={l.apply} className="text-neutral-300 underline decoration-dotted decoration-neutral-600 underline-offset-2 hover:text-emerald-300" title="Apply to your plan">
-                                {l.label}
-                              </button>
-                            ) : (
-                              l.label
-                            )}
+                  {analysis && (analysis.extraSpend > 1000 || analysis.homePrice > 60_000 || analysis.kids >= 1) && (
+                    <div>
+                      <p className="text-[11px] leading-relaxed text-neutral-500">
+                        Retiring at <span className="text-neutral-300">{analysis.ra}</span>, you'd still stay ~80% safe while adding <span className="text-neutral-600">(each on its own, holding the rest)</span>…
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {analysis.homePrice > 60_000 && (
+                          <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
+                            <span className="text-sm">🏠</span>
+                            <span className="text-sm font-semibold text-neutral-100">{analysis.homePriceAtCap ? '≥' : ''}{usdShort(analysis.homePrice)}</span>
+                            <span className="text-[11px] text-neutral-500">home</span>
                           </span>
-                          <span className="shrink-0 font-semibold tabular-nums text-emerald-300">{l.effect}</span>
-                        </div>
-                      ))}
+                        )}
+                        {analysis.kids >= 1 && (
+                          <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
+                            <span className="text-sm">👶</span>
+                            <span className="text-sm font-semibold text-neutral-100">{analysis.kids}{analysis.kidsAtCap ? '+' : ''}</span>
+                            <span className="text-[11px] text-neutral-500">more kid{analysis.kids > 1 ? 's' : ''}</span>
+                          </span>
+                        )}
+                        {analysis.extraSpend > 1000 && (
+                          <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5">
+                            <span className="text-sm">💸</span>
+                            <span className="text-sm font-semibold text-neutral-100">{analysis.extraSpendAtCap ? '≥' : '+'}{usdShort(analysis.extraSpend)}/yr</span>
+                            <span className="text-[11px] text-neutral-500">spending</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                  {levers.length > 0 && (
+                    <div>
+                      <p className="text-[11px] leading-relaxed text-neutral-500">Biggest levers from here…</p>
+                      <div className="mt-2 space-y-2">
+                        {levers.map((l) => (
+                          <div key={l.key} className="flex items-baseline justify-between gap-3 text-xs">
+                            <span className="flex min-w-0 items-baseline gap-1.5 text-neutral-400">
+                              <span className="shrink-0">{l.icon}</span>
+                              {l.apply ? (
+                                <button type="button" onClick={l.apply} className="text-left text-neutral-300 underline decoration-dotted decoration-neutral-600 underline-offset-2 hover:text-emerald-300" title="Apply to your plan">
+                                  {l.label}
+                                </button>
+                              ) : (
+                                <span>{l.label}</span>
+                              )}
+                            </span>
+                            <span className="shrink-0 font-semibold tabular-nums text-emerald-300">{l.effect}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
