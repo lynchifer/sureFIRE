@@ -12,19 +12,9 @@ import kotlin.test.assertTrue
  * the load-bearing test is that the reported extra-spend sits right on the 80% survival boundary.
  */
 class AffordabilityTest {
-    // The home/child terms a UI seeds new events with (jsMain EventDefaults isn't visible here — mirror it).
-    private fun afford(inp: FixedInputs) = affordability(
-        inp,
-        homeDownPct = 0.2, homeMortgageRate = 0.065, homeTermYears = 30,
-        homeAppreciation = 0.007, homeOngoingPct = 0.02, homeSellPct = 0.07,
-        childYears = 18, childAnnualCost = 15_000.0, childBirthCost = 5_000.0, childCollegeCost = 100_000.0,
-    )
+    private fun afford(inp: FixedInputs) = affordability(inp)
 
-    private fun survival(inp: FixedInputs, runs: Int = MonteCarloModel.RECOMMEND_RUNS): Double =
-        lifeSuccessRate(
-            inp, inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
-            MonteCarloModel.CORRELATION, MonteCarloModel.NU, runs, MonteCarloModel.SEED,
-        )
+    private fun survival(inp: FixedInputs, runs: Int = MonteCarloModel.RECOMMEND_RUNS): Double = mcSurvival(inp, runs)
 
     private fun withExtraSpend(inp: FixedInputs, v: Double): FixedInputs {
         val effRetAge = Finance.effectiveRetireAge(inp.currentAge, inp.retireAge, inp.socialSecurityAge)

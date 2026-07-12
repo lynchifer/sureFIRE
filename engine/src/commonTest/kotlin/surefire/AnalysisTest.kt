@@ -10,12 +10,7 @@ import kotlin.test.assertTrue
  * [Projection.retireSpend] exposure (the resolved retirement-spend the UI must display, never re-derive).
  */
 class AnalysisTest {
-    private fun run(inp: FixedInputs) = analysis(
-        inp,
-        homeDownPct = 0.2, homeMortgageRate = 0.065, homeTermYears = 30,
-        homeAppreciation = 0.007, homeOngoingPct = 0.02, homeSellPct = 0.07,
-        childYears = 18, childAnnualCost = 15_000.0, childBirthCost = 5_000.0, childCollegeCost = 100_000.0,
-    )
+    private fun run(inp: FixedInputs) = analysis(inp)
 
     @Test
     fun sentinelRetireAgeResolvesToTheRecommendation() {
@@ -37,9 +32,7 @@ class AnalysisTest {
         // The consolidated call must be the same math as the parts, evaluated at the resolved age.
         val inp = reference().copy(retireAge = 60)
         val r = run(inp)
-        val standalone = affordability(
-            inp, 0.2, 0.065, 30, 0.007, 0.02, 0.07, 18, 15_000.0, 5_000.0, 100_000.0,
-        )
+        val standalone = affordability(inp)
         assertEquals(standalone.extraSpend, r.affordability.extraSpend)
         assertEquals(insights(inp).spendLessFiYears, r.insights.spendLessFiYears)
         assertTrue(r.lifeSuccess in 0.0..1.0)

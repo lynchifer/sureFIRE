@@ -31,12 +31,7 @@ class AnalysisResult(
     val insights: Insights,
 )
 
-fun analysis(
-    inp0: FixedInputs,
-    homeDownPct: Double, homeMortgageRate: Double, homeTermYears: Int,
-    homeAppreciation: Double, homeOngoingPct: Double, homeSellPct: Double,
-    childYears: Int, childAnnualCost: Double, childBirthCost: Double, childCollegeCost: Double,
-): AnalysisResult {
+fun analysis(inp0: FixedInputs): AnalysisResult {
     val rec = recommendedRetireAge(inp0)
     val eff = if (inp0.retireAge > 0) maxOf(inp0.currentAge, inp0.retireAge) else rec
     val inp = inp0.copy(retireAge = eff)
@@ -63,10 +58,7 @@ fun analysis(
     // lean, at eff on 1×, at Y on fat". Monotonic in spending, so leanAge ≤ rec ≤ fatAge.
     val retireSpendBase = projectFixed(inp).retireSpend
     fun tierAge(mult: Double): Int = recommendedRetireAge(inp.copy(retirementSpending = (retireSpendBase * mult).coerceAtLeast(1.0)))
-    val afford = affordability(
-        inp, homeDownPct, homeMortgageRate, homeTermYears, homeAppreciation, homeOngoingPct, homeSellPct,
-        childYears, childAnnualCost, childBirthCost, childCollegeCost,
-    )
+    val afford = affordability(inp)
     return AnalysisResult(
         rec, eff, outcomes.survival, coastAge, outcomes.p10DepletionAge, outcomes.p10FinalBalance,
         retireSpendBase, tierAge(inp0.leanFactor), tierAge(inp0.fatFactor), afford, insights(inp),

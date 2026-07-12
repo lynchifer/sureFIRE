@@ -37,14 +37,14 @@ object InsightNudges {
     const val ALLOC_SHIFT = 0.10        // "move 10 pts of the allocation"
 }
 
-fun insights(inp0: FixedInputs, runs: Int = MonteCarloModel.RECOMMEND_RUNS): Insights {
+fun insights(inp0: FixedInputs): Insights {
     // Pin the retire age up front so no lever can smuggle in "also retire later": retireAge ≤ 0 falls
     // back to the claim age, so bumping the claim age would otherwise silently move retirement too.
     val effRet = Finance.effectiveRetireAge(inp0.currentAge, inp0.retireAge, inp0.socialSecurityAge)
     val inp = inp0.copy(retireAge = effRet)
 
     fun fiYears(i: FixedInputs): Double = projectFixed(i).yearsToFire
-    fun surv(i: FixedInputs): Double = mcSurvival(i, runs)
+    fun surv(i: FixedInputs): Double = mcSurvival(i, MonteCarloModel.RECOMMEND_RUNS)
 
     val baseFi = fiYears(inp)
     val baseSurv = surv(inp)

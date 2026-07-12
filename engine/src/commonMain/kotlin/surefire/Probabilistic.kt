@@ -119,24 +119,23 @@ class MonteCarloResult(
 )
 
 /**
- * Monte Carlo accumulation using a **multivariate Student-t** return model (fat tails) with the
- * given stock/bond means, std-devs, correlation, and degrees of freedom [nu]. Net-worth percentile
- * bands per age + the distribution of years-to-FIRE.
+ * Monte Carlo accumulation using a **multivariate Student-t** return model (fat tails): net-worth
+ * percentile bands per age + the distribution of years-to-FIRE. Means come from the plan's own real
+ * returns; the model parameters default to the engine's locked [MonteCarloModel] calibration
+ * (overridable for tests — e.g. a zero-σ degenerate run must reproduce the deterministic path).
  */
 fun monteCarlo(
     inp: FixedInputs,
-    mcStockReturn: Double,
-    mcBondReturn: Double,
-    stockSd: Double,
-    bondSd: Double,
-    correlation: Double,
-    nu: Int,
-    runs: Int,
-    seed: Int,
+    stockSd: Double = MonteCarloModel.STOCK_SD,
+    bondSd: Double = MonteCarloModel.BOND_SD,
+    correlation: Double = MonteCarloModel.CORRELATION,
+    nu: Int = MonteCarloModel.NU,
+    runs: Int = MonteCarloModel.RUNS,
+    seed: Int = MonteCarloModel.SEED,
 ): MonteCarloResult {
     val n = horizonYears(inp)
     val rng = Rng(seed)
-    val sampler = ReturnSampler(mcStockReturn, mcBondReturn, stockSd, bondSd, correlation, nu, inp.stockPct, inp.bondPct, inp.cashPct, inp.cashReturn)
+    val sampler = ReturnSampler(inp.stockReturn, inp.bondReturn, stockSd, bondSd, correlation, nu, inp.stockPct, inp.bondPct, inp.cashPct, inp.cashReturn)
 
     val byAge = Array(n + 1) { DoubleArray(runs) }
     val years = DoubleArray(runs)
@@ -204,29 +203,9 @@ fun monteCarlo(
  * age. Same model as [monteCarlo] but skips all the percentile/band bookkeeping — used by the success
  * readout and the recommended-age search, both of which only need the one number.
  */
-internal fun lifeSuccessRate(
-    inp: FixedInputs, mcStockReturn: Double, mcBondReturn: Double, stockSd: Double, bondSd: Double,
-    correlation: Double, nu: Int, runs: Int, seed: Int,
-): Double {
-    val n = horizonYears(inp)
-    val rng = Rng(seed)
-    val sampler = ReturnSampler(mcStockReturn, mcBondReturn, stockSd, bondSd, correlation, nu, inp.stockPct, inp.bondPct, inp.cashPct, inp.cashReturn)
-    val g = DoubleArray(n)
-    var ok = 0
-    for (run in 0 until runs) {
-        for (t in 0 until n) g[t] = sampler.next(rng)
-        val d = simulate(inp, g).depletionAge
-        if (d < 0 || d >= inp.lifeExpectancy) ok++
-    }
-    return ok.toDouble() / runs
-}
-
 /** Monte Carlo survival at the engine's locked model parameters — the ONE way every search (recommended
  *  age, affordability, insights, analysis) measures survival, so they can never drift apart. */
-internal fun mcSurvival(inp: FixedInputs, runs: Int): Double = lifeSuccessRate(
-    inp, inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
-    MonteCarloModel.CORRELATION, MonteCarloModel.NU, runs, MonteCarloModel.SEED,
-)
+internal fun mcSurvival(inp: FixedInputs, runs: Int): Double = lifeOutcomes(inp, runs).survival
 
 /** Survival plus the worst-decile outcome of the retire-at-RE-age drawdown. */
 internal class LifeOutcomes(
@@ -235,9 +214,9 @@ internal class LifeOutcomes(
     val p10FinalBalance: Double,  // 10th-percentile balance at the death age (0 when ≥10% of paths deplete)
 )
 
-/** One Monte Carlo pass collecting survival AND the roughest-decile outcome — same model, seed, and
- *  per-run sampling as [mcSurvival]/[monteCarlo], so the headline survival can never disagree with the
- *  worst-case readout shown beside it. */
+/** THE drawdown Monte Carlo loop (the accumulation counterpart is [monteCarlo]): one pass collecting
+ *  survival AND the roughest-decile outcome, at the engine's locked model, seed, and per-run sampling —
+ *  so the headline survival can never disagree with the worst-case readout shown beside it. */
 internal fun lifeOutcomes(inp: FixedInputs, runs: Int): LifeOutcomes {
     val n = horizonYears(inp)
     val rng = Rng(MonteCarloModel.SEED)
@@ -266,14 +245,14 @@ internal fun lifeOutcomes(inp: FixedInputs, runs: Int): LifeOutcomes {
 
 /**
  * Recommended "don't go broke" RE age = the EARLIEST age whose Monte Carlo drawdown survives to the
- * death age at least [threshold] of the time (default 80%). Risk-adjusted, unlike a deterministic
- * average-case break-even. Survival is monotonic in the RE age (retiring later means more accumulation
- * and fewer drawdown years, so every path is at least as safe), and retiring at the death age trivially
- * survives — so a binary search for the leftmost passing age is exact and runs ~log2(years) simulations.
+ * death age at least [MonteCarloModel.RECOMMEND_SURVIVAL] (80%) of the time. Risk-adjusted, unlike a
+ * deterministic average-case break-even. Survival is monotonic in the RE age (retiring later means more
+ * accumulation and fewer drawdown years, so every path is at least as safe), and retiring at the death
+ * age trivially survives — so a binary search for the leftmost passing age is exact, ~log2(years) sims.
  */
-fun recommendedRetireAge(inp: FixedInputs, threshold: Double = MonteCarloModel.RECOMMEND_SURVIVAL): Int {
+fun recommendedRetireAge(inp: FixedInputs): Int {
     fun survives(age: Int): Boolean =
-        mcSurvival(inp.copy(retireAge = age), MonteCarloModel.RECOMMEND_RUNS) >= threshold
+        mcSurvival(inp.copy(retireAge = age), MonteCarloModel.RECOMMEND_RUNS) >= MonteCarloModel.RECOMMEND_SURVIVAL
     var lo = inp.currentAge
     var hi = maxOf(inp.currentAge, inp.lifeExpectancy) // retiring at/after death has no drawdown ⇒ always survives
     while (lo < hi) {
@@ -307,19 +286,13 @@ private const val AFFORD_BISECTIONS = 20         // ~cap/2^20 resolution — fin
 
 /**
  * Binary-search the headroom on each lever at the risk-adjusted survival bar. Survival is monotonic in
- * every lever (more spending / a pricier home / another child is strictly costlier), so a bisection for the
- * largest still-surviving value is exact. The home & child terms are passed in (the JS layer owns the
- * defaults a UI seeds new events with) so an "affordable home" uses the exact economics a hand-added one would.
+ * every lever (more spending / a pricier home / another child is strictly costlier), so a bisection for
+ * the largest still-surviving value is exact. The probed home/child use [EventDefaults] terms, so an
+ * "affordable home" has the exact economics of a hand-added one.
  */
-fun affordability(
-    inp: FixedInputs,
-    homeDownPct: Double, homeMortgageRate: Double, homeTermYears: Int,
-    homeAppreciation: Double, homeOngoingPct: Double, homeSellPct: Double,
-    childYears: Int, childAnnualCost: Double, childBirthCost: Double, childCollegeCost: Double,
-    threshold: Double = MonteCarloModel.RECOMMEND_SURVIVAL,
-    runs: Int = MonteCarloModel.RECOMMEND_RUNS,
-): Affordability {
-    fun survives(i: FixedInputs): Boolean = mcSurvival(i, runs) >= threshold
+fun affordability(inp: FixedInputs): Affordability {
+    fun survives(i: FixedInputs): Boolean =
+        mcSurvival(i, MonteCarloModel.RECOMMEND_RUNS) >= MonteCarloModel.RECOMMEND_SURVIVAL
 
     // Already stretched at this retire age ⇒ nothing to spare on any lever.
     if (!survives(inp)) return Affordability(false, 0.0, false, -1.0, false, 0, false)
@@ -349,7 +322,8 @@ fun affordability(
     val ownsHome = inp.properties.isNotEmpty()
     val homePrice = if (ownsHome) -1.0 else maxScalar(AFFORD_HOME_CAP) { v ->
         inp.copy(properties = inp.properties + Presets.homeProperty(
-            effRetAge, v, homeDownPct, homeMortgageRate, homeTermYears, homeAppreciation, homeOngoingPct, homeSellPct, null,
+            effRetAge, v, EventDefaults.homeDownPct, EventDefaults.homeMortgageRate, EventDefaults.homeTermYears,
+            EventDefaults.homeAppreciation, EventDefaults.homeOngoingPct, EventDefaults.homeSellPct, null,
         ))
     }
 
@@ -357,7 +331,7 @@ fun affordability(
     var kids = 0
     for (n in 1..AFFORD_KIDS_CAP) {
         val extra = (0 until n).flatMap { j ->
-            Presets.childFlows(inp.currentAge + 1 + j * 2, childYears, childAnnualCost, childBirthCost, childCollegeCost)
+            Presets.childFlows(inp.currentAge + 1 + j * 2, EventDefaults.childYears, EventDefaults.childAnnualCost, EventDefaults.childBirthCost, EventDefaults.childCollegeCost)
         }
         if (survives(inp.copy(cashFlows = inp.cashFlows + extra))) kids = n else break
     }

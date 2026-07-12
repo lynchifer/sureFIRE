@@ -11,10 +11,7 @@ import kotlin.test.assertTrue
  */
 class RecommendedRetireAgeTest {
     private fun survivalAt(inp: FixedInputs, age: Int, runs: Int = MonteCarloModel.RECOMMEND_RUNS): Double =
-        lifeSuccessRate(
-            inp.copy(retireAge = age), inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD,
-            MonteCarloModel.CORRELATION, MonteCarloModel.NU, runs, MonteCarloModel.SEED,
-        )
+        mcSurvival(inp.copy(retireAge = age), runs)
 
     @Test
     fun overfundedCanRetireNow() {

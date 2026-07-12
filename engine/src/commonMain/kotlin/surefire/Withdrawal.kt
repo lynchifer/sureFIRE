@@ -44,9 +44,10 @@ internal class WithdrawalPlan(
     private val assumedReturn: Double,   // VPW's PMT discount rate (the plan's expected real return)
     private val lifeExpectancy: Int,
     private val withdrawalRate: Double,  // GK manages a % OF THE PORTFOLIO around this rate
-    private val guardBand: Double = 0.20, // ±20% rate drift trips a guardrail
-    private val guardStep: Double = 0.10, // each trip adjusts spending ±10%
 ) {
+    private val guardBand = 0.20 // ±20% rate drift trips a guardrail
+    private val guardStep = 0.10 // each trip adjusts spending ±10%
+
     // GK starts at withdrawalRate × the ACTUAL retirement portfolio — so an over-funded retiree draws a
     // meaningful share of their wealth (e.g. 3.7% of $50M ≈ $1.85M), not their tiny stated spending need.
     private var gkDraw = withdrawalRate * initialBalance

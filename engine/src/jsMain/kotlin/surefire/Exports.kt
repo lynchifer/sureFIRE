@@ -24,34 +24,8 @@ import kotlin.js.JsExport
 fun socialSecurityBenefitJs(pia: Double, claimAge: Int): Double = Finance.socialSecurityBenefit(pia, claimAge)
 
 // --- Life-event presets ----------------------------------------------------------------------------
-// The engine owns what each preset *costs* (see commonMain Presets) AND the default values a UI should
-// seed a new event with (EventDefaults) — so every frontend models them identically.
-
-/** Default modeling values for a freshly-added event (a UI seeds its form from these). */
-@JsExport
-object EventDefaults {
-    const val childYears: Int = 18
-    const val childAnnualCost: Double = 15_000.0
-    const val childBirthCost: Double = 5_000.0
-    // ≈ 4 years all-in (tuition + room & board) at a public in-state university, in today's dollars
-    // (College Board 2024-25 budgets run ~$25-30k/yr). Lands as one lump when the child turns 18.
-    const val childCollegeCost: Double = 100_000.0
-    const val homePrice: Double = 400_000.0
-    const val homeDownPct: Double = 0.2
-    const val homeMortgageRate: Double = 0.065
-    const val homeTermYears: Int = 30
-    const val homeAppreciation: Double = 0.007
-    const val homeOngoingPct: Double = 0.02
-    const val homeSellPct: Double = 0.07
-    const val oneTimeAmount: Double = 20_000.0
-    const val customAmount: Double = 10_000.0
-    const val marriageCeremonyCost: Double = 30_000.0
-    const val marriageSpouseIncome: Double = 60_000.0
-    const val marriageSpouseSpending: Double = 15_000.0
-    const val marriageSpouseNetWorth: Double = 50_000.0
-    const val sabbaticalYears: Int = 1
-    const val sabbaticalReduction: Double = 1.0 // fraction of income removed (1.0 = full pause)
-}
+// The engine owns what each preset *costs* (commonMain Presets) AND the default values a UI seeds a
+// new event with (commonMain EventDefaults, exported from there) — every frontend models them identically.
 
 @JsExport
 class LifeEventInput(
@@ -346,8 +320,7 @@ class MonteCarloResultJs(
 @JsExport
 fun monteCarloJs(inputs: FireInputsJs): MonteCarloResultJs {
     val inp = inputs.toFixed()
-    // The MC return model (σ, correlation, ν, runs, seed) is the engine's; means are the user's real returns.
-    val r = monteCarlo(inp, inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD, MonteCarloModel.CORRELATION, MonteCarloModel.NU, MonteCarloModel.RUNS, MonteCarloModel.SEED)
+    val r = monteCarlo(inp) // means from the plan's own returns; model params are the engine's locked calibration
     return MonteCarloResultJs(
         r.ages, r.p10, r.p25, r.p50, r.p75, r.p90, r.medianYears, r.p10Years, r.p90Years, r.successRate,
         r.lifeSuccessRate, r.fireTarget, Finance.savingsRate(inp.income, inp.spending), // fireTarget comes from the simulate MC already ran
@@ -416,12 +389,7 @@ class AnalysisJs(
  *  (auto-tracking), not the Social Security claim age like the projection entry points. */
 @JsExport
 fun analysisJs(inputs: FireInputsJs): AnalysisJs {
-    val r = analysis(
-        inputs.toFixed(),
-        EventDefaults.homeDownPct, EventDefaults.homeMortgageRate, EventDefaults.homeTermYears,
-        EventDefaults.homeAppreciation, EventDefaults.homeOngoingPct, EventDefaults.homeSellPct,
-        EventDefaults.childYears, EventDefaults.childAnnualCost, EventDefaults.childBirthCost, EventDefaults.childCollegeCost,
-    )
+    val r = analysis(inputs.toFixed())
     val a = r.affordability
     val i = r.insights
     return AnalysisJs(
