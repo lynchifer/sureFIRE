@@ -19,18 +19,18 @@ export function groupThousands(s: string): string {
  * displayed with thousands separators (commas). Shared by App's Field and the life-event Num input.
  */
 export function useClearableNumber(value: number, onChange: (n: number) => void, emptyFallback: number, group = false) {
-  const fmt = (s: string) => (group ? groupThousands(s) : s)
-  const [text, setText] = useState(() => (Number.isFinite(value) ? fmt(String(value)) : ''))
+  const fmt = (s: string, grouped: boolean) => (grouped ? groupThousands(s) : s)
+  const [text, setText] = useState(() => (Number.isFinite(value) ? fmt(String(value), group) : ''))
   const last = useRef(value)
   useEffect(() => {
     if (value !== last.current) {
-      setText(Number.isFinite(value) ? fmt(String(value)) : '')
+      setText(Number.isFinite(value) ? (group ? groupThousands(String(value)) : String(value)) : '')
       last.current = value
     }
-  }, [value])
+  }, [value, group])
   const onText = (raw: string) => {
     const cleaned = raw.replace(/,/g, '')
-    setText(fmt(cleaned))
+    setText(fmt(cleaned, group))
     const n = parseFloat(cleaned)
     const next = cleaned.trim() === '' || Number.isNaN(n) ? emptyFallback : n
     last.current = next

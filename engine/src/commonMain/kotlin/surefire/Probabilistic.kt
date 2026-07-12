@@ -105,7 +105,6 @@ class MonteCarloResult(
     val p50: DoubleArray,
     val p75: DoubleArray,
     val p90: DoubleArray,
-    val yearsToFire: DoubleArray, // per run; NaN if not reached within the horizon
     val medianYears: Double,
     val p10Years: Double,
     val p90Years: Double,
@@ -186,7 +185,6 @@ fun monteCarlo(
     return MonteCarloResult(
         ages = ages,
         p10 = p10, p25 = p25, p50 = p50, p75 = p75, p90 = p90,
-        yearsToFire = years,
         medianYears = medYears,
         p10Years = if (reachedYears.isEmpty()) Double.NaN else percentileSorted(reachedYears, 0.10),
         p90Years = if (reachedYears.isEmpty()) Double.NaN else percentileSorted(reachedYears, 0.90),

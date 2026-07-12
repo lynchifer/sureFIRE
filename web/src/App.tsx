@@ -178,6 +178,8 @@ function Field({
 
 /** Like Field, but the value is optional: an empty box means "unset" (→ undefined), so it tracks the
  *  dynamic [placeholder] default (e.g. current spending) instead of pinning to a number. */
+const fmtOptional = (n: number | undefined, asMoney: boolean) => (n != null && Number.isFinite(n) ? (asMoney ? groupThousands(String(n)) : String(n)) : '')
+
 function OptionalField({
   label,
   value,
@@ -196,15 +198,14 @@ function OptionalField({
   error?: string
 }) {
   const money = prefix === '$'
-  const fmt = (n: number | undefined) => (n != null && Number.isFinite(n) ? (money ? groupThousands(String(n)) : String(n)) : '')
-  const [text, setText] = useState(() => fmt(value))
+  const [text, setText] = useState(() => fmtOptional(value, money))
   const last = useRef<number | undefined>(value)
   useEffect(() => {
     if (value !== last.current) {
-      setText(fmt(value))
+      setText(fmtOptional(value, money))
       last.current = value
     }
-  }, [value])
+  }, [value, money])
   const onText = (raw: string) => {
     const cleaned = raw.replace(/,/g, '')
     setText(money ? groupThousands(cleaned) : cleaned)
@@ -258,6 +259,78 @@ function Slider({ label, value, min, max, onChange, help, format }: { label: str
         <span>{max}</span>
       </div>
     </label>
+  )
+}
+
+/** The PATH TO FI life-strip: ONE axis from today to the death age, so the whole remaining life is the
+ *  canvas. Milestones ride it at their true ages — 🏖️ Coast FI, the three tiers, and the retire age in
+ *  the chart's pink "RE" language (hollow ring, like the chart's dot) — with icon+age labels alternating
+ *  above/below the track, metro-map style. Rows are assigned greedily: alternate, but flip when a label
+ *  would crowd its row-neighbor (labels compact to color-coded ages on mobile). The tier gradient's stops
+ *  align to the actual lean/FI/fat positions, then fade through the retirement years. */
+function LifeStrip({ currentAge, lifeExpectancy, tiers, coastAge, retireAge, isMobile }: {
+  currentAge: number
+  lifeExpectancy: number
+  tiers: { label: string; icon: string; color: string; years: number; age: number }[]
+  coastAge: number | null // coast age when it's a real milestone (strictly between now and retirement), else null
+  retireAge: number | null // effective retire age when there's a retirement phase, else null
+  isMobile: boolean
+}) {
+  type Mark = { key: string; age: number; color: string; icon: string; hero?: boolean; ring?: boolean }
+  const marks: Mark[] = [
+    ...(coastAge != null ? [{ key: 'Coast FI', age: coastAge, color: '#38bdf8', icon: '🏖️' }] : []),
+    ...tiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ key: t.label, age: t.age, color: t.color, icon: t.icon, hero: t.label === 'FI' })),
+    ...(retireAge != null ? [{ key: 'retire', age: retireAge, color: C.fire, icon: 'RE', ring: true }] : []),
+  ].sort((a, b) => a.age - b.age)
+  if (marks.length === 0)
+    return <div className="mt-4 h-1 rounded-full bg-gradient-to-r from-[#f87171]/50 via-[#fbbf24]/50 to-[#34d399]/50" />
+  const end = Math.max(lifeExpectancy, ...marks.map((m) => m.age))
+  const pos = (a: number) => Math.min(97, Math.max(3, ((a - currentAge) / (end - currentAge)) * 100))
+  const stopAt = (t: (typeof tiers)[number], fb: number) => (Number.isFinite(t.years) ? pos(t.age) : fb)
+  const track = `linear-gradient(90deg, #f8717180 0%, #f8717180 ${stopAt(tiers[0], 0)}%, #fbbf2480 ${stopAt(tiers[1], 40)}%, #34d39980 ${stopAt(tiers[2], 70)}%, #34d39922 100%)`
+  // Row assignment: alternate above/below, flipping rows when a label would crowd the previous one on
+  // its row. The below row starts "occupied" by the "now · age" anchor and ends before the death anchor.
+  const halfW = isMobile ? 3 : 2.5
+  const lastEnd = [-Infinity, isMobile ? 16 : 8]
+  const rowOf = marks.map((m, i) => {
+    const p = pos(m.age)
+    const pref = i % 2
+    const fits = (r: number) => p - halfW >= lastEnd[r] + 1 && (r === 0 || p + halfW <= 92)
+    const r = fits(pref) ? pref : fits(1 - pref) ? 1 - pref : lastEnd[pref] <= lastEnd[1 - pref] ? pref : 1 - pref
+    lastEnd[r] = p + halfW
+    return r
+  })
+  const label = (m: Mark) => (
+    <span
+      key={m.key}
+      title={`${m.key} · age ${m.age}`}
+      className={`absolute -translate-x-1/2 whitespace-nowrap text-[10px] tabular-nums ${m.hero ? 'font-semibold' : ''}`}
+      style={{ left: `${pos(m.age)}%`, color: isMobile || m.icon === 'RE' ? m.color : undefined }}
+    >
+      {m.icon === 'RE' ? <span className="font-semibold">RE </span> : isMobile ? null : <span className="mr-0.5">{m.icon}</span>}
+      <span className={isMobile || m.icon === 'RE' ? '' : m.hero ? 'text-neutral-200' : 'text-neutral-500'}>{m.age}</span>
+    </span>
+  )
+  return (
+    <div className="mt-4">
+      <div className="relative h-4">{marks.filter((_, i) => rowOf[i] === 0).map(label)}</div>
+      <div className="relative my-1 h-2.5">
+        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full" style={{ background: track }} />
+        {marks.map((m) => (
+          <span
+            key={m.key}
+            title={`${m.key} · age ${m.age}`}
+            className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+            style={{ left: `${pos(m.age)}%`, width: m.hero ? 11 : 8, height: m.hero ? 11 : 8, background: m.ring ? '#0c0e13' : m.color, borderColor: m.ring ? m.color : '#0c0e13' }}
+          />
+        ))}
+      </div>
+      <div className="relative h-4">
+        {marks.filter((_, i) => rowOf[i] === 1).map(label)}
+        <span className="absolute left-0 text-[10px] tabular-nums text-neutral-600">now · {currentAge}</span>
+        <span className="absolute right-0 text-[10px] tabular-nums text-neutral-600">{end}</span>
+      </div>
+    </div>
   )
 }
 
@@ -1077,78 +1150,14 @@ export default function App() {
                   )
                 })}
               </div>
-              {(() => {
-                // Life-strip: ONE axis from today to the death age, so the whole remaining life is the
-                // canvas. Milestones ride it at their true ages — 🏖️ Coast FI, the three tiers, and the
-                // retire age in the chart's pink "RE" language (hollow ring, like the chart's dot) — with
-                // icon+age labels alternating above/below the track, metro-map style, to dodge collisions.
-                // The tier gradient's stops align to the actual lean/FI/fat positions, then fade through
-                // the retirement years. Everything repositions live as inputs change.
-                type Mark = { key: string; age: number; color: string; icon: string; hero?: boolean; ring?: boolean }
-                const marks: Mark[] = [
-                  ...(analysis && analysis.coastAge > inp.currentAge && analysis.coastAge < analysis.ra
-                    ? [{ key: 'Coast FI', age: analysis.coastAge, color: '#38bdf8', icon: '🏖️' }]
-                    : []),
-                  ...heroTiers.filter((t) => Number.isFinite(t.years)).map((t) => ({ key: t.label, age: t.age, color: t.color, icon: t.icon, hero: t.label === 'FI' })),
-                  ...(hasRetirement ? [{ key: 'retire', age: proj.retireAge, color: C.fire, icon: 'RE', ring: true }] : []),
-                ].sort((a, b) => a.age - b.age)
-                if (marks.length === 0)
-                  return <div className="mt-4 h-1 rounded-full bg-gradient-to-r from-[#f87171]/50 via-[#fbbf24]/50 to-[#34d399]/50" />
-                const end = Math.max(inp.lifeExpectancy, ...marks.map((m) => m.age))
-                const pos = (a: number) => Math.min(97, Math.max(3, ((a - inp.currentAge) / (end - inp.currentAge)) * 100))
-                const stopAt = (t: (typeof heroTiers)[number], fb: number) => (Number.isFinite(t.years) ? pos(t.age) : fb)
-                const track = `linear-gradient(90deg, #f8717180 0%, #f8717180 ${stopAt(heroTiers[0], 0)}%, #fbbf2480 ${stopAt(heroTiers[1], 40)}%, #34d39980 ${stopAt(heroTiers[2], 70)}%, #34d39922 100%)`
-                // Row assignment: alternate above/below, but greedily flip rows when a label would crowd
-                // the previous one on its row (labels are compact colored ages on mobile, icon+age on
-                // desktop, so the estimated half-width differs). The below row starts "occupied" by the
-                // "now · age" anchor and ends before the death anchor.
-                const halfW = isMobile ? 3 : 2.5
-                const lastEnd = [-Infinity, isMobile ? 16 : 8]
-                const rowOf = marks.map((m, i) => {
-                  const p = pos(m.age)
-                  const pref = i % 2
-                  const fits = (r: number) => p - halfW >= lastEnd[r] + 1 && (r === 0 || p + halfW <= 92)
-                  const r = fits(pref) ? pref : fits(1 - pref) ? 1 - pref : lastEnd[pref] <= lastEnd[1 - pref] ? pref : 1 - pref
-                  lastEnd[r] = p + halfW
-                  return r
-                })
-                const label = (m: Mark) => (
-                  <span
-                    key={m.key}
-                    title={`${m.key} · age ${m.age}`}
-                    className={`absolute -translate-x-1/2 whitespace-nowrap text-[10px] tabular-nums ${m.hero ? 'font-semibold' : ''}`}
-                    style={{ left: `${pos(m.age)}%`, color: isMobile || m.icon === 'RE' ? m.color : undefined }}
-                  >
-                    {m.icon === 'RE' ? (
-                      <span className="font-semibold">RE </span>
-                    ) : isMobile ? null : (
-                      <span className="mr-0.5">{m.icon}</span>
-                    )}
-                    <span className={isMobile || m.icon === 'RE' ? '' : m.hero ? 'text-neutral-200' : 'text-neutral-500'}>{m.age}</span>
-                  </span>
-                )
-                return (
-                  <div className="mt-4">
-                    <div className="relative h-4">{marks.filter((_, i) => rowOf[i] === 0).map(label)}</div>
-                    <div className="relative my-1 h-2.5">
-                      <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full" style={{ background: track }} />
-                      {marks.map((m) => (
-                        <span
-                          key={m.key}
-                          title={`${m.key} · age ${m.age}`}
-                          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
-                          style={{ left: `${pos(m.age)}%`, width: m.hero ? 11 : 8, height: m.hero ? 11 : 8, background: m.ring ? '#0c0e13' : m.color, borderColor: m.ring ? m.color : '#0c0e13' }}
-                        />
-                      ))}
-                    </div>
-                    <div className="relative h-4">
-                      {marks.filter((_, i) => rowOf[i] === 1).map(label)}
-                      <span className="absolute left-0 text-[10px] tabular-nums text-neutral-600">now · {inp.currentAge}</span>
-                      <span className="absolute right-0 text-[10px] tabular-nums text-neutral-600">{end}</span>
-                    </div>
-                  </div>
-                )
-              })()}
+              <LifeStrip
+                currentAge={inp.currentAge}
+                lifeExpectancy={inp.lifeExpectancy}
+                tiers={heroTiers}
+                coastAge={analysis && analysis.coastAge > inp.currentAge && analysis.coastAge < analysis.ra ? analysis.coastAge : null}
+                retireAge={hasRetirement ? proj.retireAge : null}
+                isMobile={isMobile}
+              />
               {analysis && analysis.coastAge >= 0 && analysis.coastAge < analysis.ra && (
                 <p className="mt-2.5 text-[11px] leading-relaxed text-neutral-500">
                   🏖️{' '}

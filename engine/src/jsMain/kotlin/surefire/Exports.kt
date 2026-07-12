@@ -329,7 +329,6 @@ class MonteCarloResultJs(
     val p50: DoubleArray,
     val p75: DoubleArray,
     val p90: DoubleArray,
-    val yearsToFire: DoubleArray,
     val medianYears: Double,
     val p10Years: Double,
     val p90Years: Double,
@@ -350,7 +349,7 @@ fun monteCarloJs(inputs: FireInputsJs): MonteCarloResultJs {
     // The MC return model (σ, correlation, ν, runs, seed) is the engine's; means are the user's real returns.
     val r = monteCarlo(inp, inp.stockReturn, inp.bondReturn, MonteCarloModel.STOCK_SD, MonteCarloModel.BOND_SD, MonteCarloModel.CORRELATION, MonteCarloModel.NU, MonteCarloModel.RUNS, MonteCarloModel.SEED)
     return MonteCarloResultJs(
-        r.ages, r.p10, r.p25, r.p50, r.p75, r.p90, r.yearsToFire, r.medianYears, r.p10Years, r.p90Years, r.successRate,
+        r.ages, r.p10, r.p25, r.p50, r.p75, r.p90, r.medianYears, r.p10Years, r.p90Years, r.successRate,
         r.lifeSuccessRate, r.fireTarget, Finance.savingsRate(inp.income, inp.spending), // fireTarget comes from the simulate MC already ran
         r.leanTarget, r.leanMedianYears, r.fatTarget, r.fatMedianYears, r.medianNetWorthAtFire,
     )

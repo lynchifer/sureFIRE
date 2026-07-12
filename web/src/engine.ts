@@ -52,7 +52,7 @@ export interface FireInputs {
   withdrawalStrategy: WithdrawalStrategy // how the retirement drawdown spends
 }
 
-export type WithdrawalStrategy = 'fixed' | 'vpw' | 'guardrails'
+type WithdrawalStrategy = 'fixed' | 'vpw' | 'guardrails'
 
 export interface ProjView {
   fireTarget: number
@@ -105,7 +105,7 @@ export interface MCView {
   medianNetWorthAtFire: number
 }
 
-export const LIFE_EXPECTANCY = 95 // default death age (the engine owns the MC model params)
+const LIFE_EXPECTANCY = 95 // default death age (the engine owns the MC model params)
 
 export const DEFAULTS: FireInputs = {
   currentAge: 32,
