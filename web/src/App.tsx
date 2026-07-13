@@ -303,7 +303,7 @@ function LifeStrip({ currentAge, lifeExpectancy, tiers, coastAge, retireAge, isM
   const label = (m: Mark) => (
     <span
       key={m.key}
-      title={`${m.key} · age ${m.age}`}
+      title={`${m.key} · age ${m.age} · ${new Date().getFullYear() + (m.age - currentAge)}`}
       className={`absolute -translate-x-1/2 whitespace-nowrap text-[10px] tabular-nums ${m.hero ? 'font-semibold' : ''}`}
       style={{ left: `${pos(m.age)}%`, color: isMobile || m.icon === 'RE' ? m.color : undefined }}
     >
@@ -319,7 +319,7 @@ function LifeStrip({ currentAge, lifeExpectancy, tiers, coastAge, retireAge, isM
         {marks.map((m) => (
           <span
             key={m.key}
-            title={`${m.key} · age ${m.age}`}
+            title={`${m.key} · age ${m.age} · ${new Date().getFullYear() + (m.age - currentAge)}`}
             className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
             style={{ left: `${pos(m.age)}%`, width: m.hero ? 11 : 8, height: m.hero ? 11 : 8, background: m.ring ? '#0c0e13' : m.color, borderColor: m.ring ? m.color : '#0c0e13' }}
           />
@@ -676,6 +676,9 @@ export default function App() {
     ret.sort((a, b) => b.score - a.score)
     return [...acc, ...ret].slice(0, 5)
   })()
+  // Calendar year an age lands in — ages are abstract, years are visceral ("FI at 56 · 2051").
+  // Pure display arithmetic (the engine has no wall-clock notion; it works in ages).
+  const yearOf = (age: number) => new Date().getFullYear() + (age - inp.currentAge)
   // The lifestyle ladder: the earliest ~80%-safe retire age at each spending tier — the aspirational
   // readout for plans hugging the recommendation (where "room to spare" is ~0 by construction, e.g. a
   // high-net-worth plan on the auto age). lean/fat rows are one-tap adoptable: set that retirement
@@ -686,7 +689,7 @@ export default function App() {
       key,
       icon,
       label: `${name} · ${usdShort(base * f)}/yr`,
-      effect: age < inp.lifeExpectancy ? `retire at ${age}` : `not by ${inp.lifeExpectancy}`,
+      effect: age < inp.lifeExpectancy ? `retire at ${age} · ${yearOf(age)}` : `not by ${inp.lifeExpectancy}`,
       apply: adoptable && age < inp.lifeExpectancy
         ? () => updateInputs((i) => ({ ...i, retirementSpending: Math.round(base * f), retireAge: undefined }))
         : undefined,
@@ -1165,7 +1168,7 @@ export default function App() {
                         {fin && <span className={`font-medium text-neutral-500 ${hero ? 'text-sm' : 'text-[11px]'}`}>yr</span>}
                       </div>
                       <div className="mt-1.5 whitespace-nowrap text-[11px] tabular-nums text-neutral-500">
-                        {fin ? <>age {t.age} · {usdShort(t.target)}</> : <>{usdShort(t.target)} target</>}
+                        {fin ? <>age {t.age} · {usdShort(t.target)}<span className="hidden sm:inline"> · {yearOf(t.age)}</span></> : <>{usdShort(t.target)} target</>}
                       </div>
                     </div>
                   )
@@ -1197,7 +1200,7 @@ export default function App() {
               <div className="mt-4 border-t border-white/[0.06] pt-4">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">In retirement</div>
                 <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-4">
-                  <Stat label="Retire at" value={`${proj.retireAge}`} hint={`${Math.max(0, inp.lifeExpectancy - proj.retireAge)} yrs of retirement`} />
+                  <Stat label="Retire at" value={`${proj.retireAge}`} hint={`${yearOf(proj.retireAge)} · ${Math.max(0, inp.lifeExpectancy - proj.retireAge)} yrs of retirement`} />
                   <Stat label="Portfolio then" value={usdShort(proj.lifeLiquid[retireIdx])} hint={`invested at ${proj.retireAge}`} />
                   <Stat label="Spend" value={`${usdShort(proj.retireSpend)}/yr`} hint={inp.socialSecurity > 0 ? `+ ${usdShort(ssActual)}/yr SS from ${claimAge}` : 'no Social Security'} />
                   <Stat label="Survives" value={lifeSuccess != null ? pct(lifeSuccess, 0) : '—'} tone={lifeSuccess != null ? toneFor(lifeSuccess) : undefined} hint={planBroke ? `runs dry at ${proj.depletionAge}` : `leaves ${usdShort(proj.lifeLiquid[deathIdx])} at ${inp.lifeExpectancy}`} />
