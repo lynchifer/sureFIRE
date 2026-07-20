@@ -59,6 +59,9 @@ export interface ProjView {
   retirementEventCost: number
   retireSpend: number // resolved retirement spending (override, or total minus the rent a held home replaces)
   fiProgress: number // today's liquid ÷ the FIRE target, clamped to [0,1]
+  milestoneAmounts: number[] // round wealth levels on the way to the target (ascending; ends at the target when reached)
+  milestoneYears: number[] // years until each level is crossed (aligned; strictly increasing)
+  halfwayYears: number // years until HALF the target (NaN if never) — compounding back-loads the rest
   savingsRate: number
   yearsToFire: number
   ageAtFire: number
@@ -202,7 +205,9 @@ function toInputs(i: FireInputs): FireInputsJs {
 export function runFixed(i: FireInputs): ProjView {
   const r = projectFixedJs(toInputs(i))
   return {
-    fireTarget: r.fireTarget, retirementEventCost: r.retirementEventCost, retireSpend: r.retireSpend, fiProgress: r.fiProgress, savingsRate: r.savingsRate, yearsToFire: r.yearsToFire, ageAtFire: r.ageAtFire,
+    fireTarget: r.fireTarget, retirementEventCost: r.retirementEventCost, retireSpend: r.retireSpend, fiProgress: r.fiProgress,
+    milestoneAmounts: arr(r.milestoneAmounts), milestoneYears: arr(r.milestoneYears), halfwayYears: r.halfwayYears,
+    savingsRate: r.savingsRate, yearsToFire: r.yearsToFire, ageAtFire: r.ageAtFire,
     leanTarget: r.leanTarget, leanYears: r.leanYears, leanAge: r.leanAge, fatTarget: r.fatTarget, fatYears: r.fatYears, fatAge: r.fatAge,
     netWorthAtFire: r.netWorthAtFire, retireAge: r.retireAge, claimAge: r.claimAge, depletionAge: r.depletionAge, lifeLiquid: arr(r.lifeLiquid), lifeNetWorth: arr(r.lifeNetWorth),
     ages: arr(r.ages), liquid: arr(r.liquid), saved: arr(r.saved), returns: arr(r.returns), netWorth: arr(r.netWorth),

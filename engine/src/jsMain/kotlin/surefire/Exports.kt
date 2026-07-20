@@ -221,6 +221,9 @@ class ProjectionResult(
     val retirementEventCost: Double,
     val retireSpend: Double, // resolved retirement spending (override, or total minus the rent a held home replaces)
     val fiProgress: Double, // today's liquid ÷ the FIRE target, clamped to [0,1]
+    val milestoneAmounts: DoubleArray, // round wealth levels on the way to the target (ascending; ends at the target when reached)
+    val milestoneYears: DoubleArray,   // years until each level is crossed (aligned; strictly increasing)
+    val halfwayYears: Double,          // years until HALF the target — the compounding-is-back-loaded readout
     val savingsRate: Double,
     val yearsToFire: Double,
     val ageAtFire: Int,
@@ -246,12 +249,16 @@ class ProjectionResult(
     val mortgageBalance: DoubleArray,
 )
 
-private fun ProjectionResult(p: Projection) = ProjectionResult(
-    p.fireTarget, p.retirementEventCost, p.retireSpend, p.fiProgress, p.savingsRate, p.yearsToFire, p.ageAtFire,
-    p.leanTarget, p.leanYears, p.leanAge, p.fatTarget, p.fatYears, p.fatAge, p.netWorthAtFire,
-    p.retireAge, p.claimAge, p.depletionAge, p.lifeLiquid, p.lifeNetWorth,
-    p.ages, p.liquid, p.saved, p.returns, p.netWorth, p.cash, p.homeValue, p.mortgageBalance,
-)
+private fun ProjectionResult(p: Projection): ProjectionResult {
+    val m = wealthMilestones(p)
+    return ProjectionResult(
+        p.fireTarget, p.retirementEventCost, p.retireSpend, p.fiProgress, m.amounts, m.years, m.halfwayYears,
+        p.savingsRate, p.yearsToFire, p.ageAtFire,
+        p.leanTarget, p.leanYears, p.leanAge, p.fatTarget, p.fatYears, p.fatAge, p.netWorthAtFire,
+        p.retireAge, p.claimAge, p.depletionAge, p.lifeLiquid, p.lifeNetWorth,
+        p.ages, p.liquid, p.saved, p.returns, p.netWorth, p.cash, p.homeValue, p.mortgageBalance,
+    )
+}
 
 @JsExport
 fun projectFixedJs(inputs: FireInputsJs): ProjectionResult = ProjectionResult(projectFixed(inputs.toFixed()))

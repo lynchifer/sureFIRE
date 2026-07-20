@@ -334,6 +334,79 @@ function LifeStrip({ currentAge, lifeExpectancy, tiers, coastAge, retireAge, isM
   )
 }
 
+/** Wealth-milestone strip (the "time to each $100k" story): round dollar levels on the way to the FIRE
+ *  target, positioned by WHEN the steady-return path crosses them. Because compounding back-loads
+ *  growth, the dots visibly bunch up toward the target — the first milestone is the hardest. Labels
+ *  alternate above/below the track with the same greedy row assignment as [LifeStrip]; the target dot
+ *  is amber (the FI tier's color). Renders nothing when there are fewer than two milestones to show. */
+function WealthStrip({ amounts, years, halfwayYears, fireTarget, start, isMobile }: {
+  amounts: number[]
+  years: number[]
+  halfwayYears: number
+  fireTarget: number
+  start: number // today's balance (the strip's origin)
+  isMobile: boolean
+}) {
+  if (amounts.length < 2) return null
+  const total = years[years.length - 1]
+  const targetReached = Math.abs(amounts[amounts.length - 1] - fireTarget) < 1
+  const pos = (y: number) => Math.min(97, Math.max(3, (y / total) * 100))
+  const hero = (i: number) => targetReached && i === amounts.length - 1
+  const calYear = (y: number) => new Date().getFullYear() + Math.round(y)
+  const halfW = isMobile ? 5 : 3
+  const lastEnd = [-Infinity, 9] // the below row starts occupied by the "today" anchor (amount-less on mobile)
+  const rowOf = years.map((y, i) => {
+    if (hero(i)) return -1 // the target's label IS the right anchor — no positioned label to collide
+    const p = pos(y)
+    const pref = i % 2
+    const fits = (r: number) => p - halfW >= lastEnd[r] + 1 && (r === 0 || p + halfW <= 90)
+    const r = fits(pref) ? pref : fits(1 - pref) ? 1 - pref : lastEnd[pref] <= lastEnd[1 - pref] ? pref : 1 - pref
+    lastEnd[r] = p + halfW
+    return r
+  })
+  const label = (i: number) => (
+    <span
+      key={amounts[i]}
+      title={`${usdShort(amounts[i])} · ${years[i].toFixed(1)} yr · ${calYear(years[i])}`}
+      className={`absolute -translate-x-1/2 whitespace-nowrap text-[10px] tabular-nums ${hero(i) ? 'font-semibold text-amber-300' : 'text-neutral-500'}`}
+      style={{ left: `${pos(years[i])}%` }}
+    >
+      {usdShort(amounts[i])}
+    </span>
+  )
+  return (
+    <div className="mt-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">Wealth milestones</p>
+      <div className="relative mt-2 h-4">{years.map((_, i) => i).filter((i) => rowOf[i] === 0).map(label)}</div>
+      <div className="relative my-1 h-2.5">
+        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full" style={{ background: 'linear-gradient(90deg, #60a5fa40 0%, #fbbf2459 100%)' }} />
+        {years.map((y, i) => (
+          <span
+            key={amounts[i]}
+            title={`${usdShort(amounts[i])} · ${y.toFixed(1)} yr · ${calYear(y)}`}
+            className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#0c0e13]"
+            style={{ left: `${pos(y)}%`, width: hero(i) ? 11 : 8, height: hero(i) ? 11 : 8, background: hero(i) ? '#fbbf24' : '#60a5fa' }}
+          />
+        ))}
+      </div>
+      <div className="relative h-4">
+        {years.map((_, i) => i).filter((i) => rowOf[i] === 1).map(label)}
+        <span className="absolute left-0 text-[10px] tabular-nums text-neutral-600">{isMobile ? 'today' : `today · ${usdShort(start)}`}</span>
+        {targetReached ? (
+          <span className="absolute right-0 whitespace-nowrap text-[10px] font-semibold tabular-nums text-amber-300">{usdShort(amounts[amounts.length - 1])} · {total.toFixed(0)} yr</span>
+        ) : (
+          <span className="absolute right-0 text-[10px] tabular-nums text-neutral-600">{total.toFixed(0)} yr</span>
+        )}
+      </div>
+      {targetReached && Number.isFinite(halfwayYears) && (
+        <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">
+          Half the target (~{usdShort(fireTarget / 2)}) takes <span className="font-semibold text-neutral-300">{Math.round((halfwayYears / total) * 100)}%</span> of the time — compounding back-loads the rest.
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** One Analysis row — the section's single grammar: `icon + phrase → right-aligned consequence`.
  *  Rows with an [apply] are one-tap actionable (dotted underline); labels wrap, hanging under the text. */
 function AnalysisRow({ icon, label, effect, effectClass, apply }: { icon: string; label: string; effect: string; effectClass: string; apply?: () => void }) {
@@ -1196,6 +1269,14 @@ export default function App() {
                   )}
                 </p>
               )}
+              <WealthStrip
+                amounts={proj.milestoneAmounts}
+                years={proj.milestoneYears}
+                halfwayYears={proj.halfwayYears}
+                fireTarget={proj.fireTarget}
+                start={inp.initialInvestments}
+                isMobile={isMobile}
+              />
 
               <div className="mt-4 border-t border-white/[0.06] pt-4">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">In retirement</div>
